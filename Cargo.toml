@@ -1,0 +1,18 @@
+[package]
+name = "favicon-generator"
+version = "0.1.0"
+authors = ["Magic Len <len@magiclen.org>"]
+repository = "https://github.com/magiclen/favicon-generator"
+homepage = "https://magiclen.org/favicon-generator"
+keywords = ["favicon"]
+categories = ["command-line-utilities"]
+description= "It helps you generate favicons for different platforms."
+readme = "README.md"
+license = "MIT"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+clap = "2.32.0"
+image-convert = { git = "https://github.com/magiclen/image-convert", branch = "master" }
