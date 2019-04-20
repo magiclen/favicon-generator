@@ -15,4 +15,4 @@ panic = "abort"
 
 [dependencies]
 clap = "2.32.0"
-image-convert = { git = "https://github.com/magiclen/image-convert", branch = "master" }
+image-convert = "0.5"

@@ -123,8 +123,8 @@ pub fn run(config: Config) -> Result<i32, String> {
     ico_config.size.push((32, 32));
     ico_config.size.push((16, 16));
 
-    let image_source = image_convert::ImageResource::Path(&config.input);
-    let mut image_destination = image_convert::ImageResource::Path(favicon_path.to_str().unwrap());
+    let image_source = image_convert::ImageResource::from_path(&config.input);
+    let mut image_destination = image_convert::ImageResource::from_path(favicon_path);
 
     if let Err(e) = image_convert::to_ico(&mut image_destination, &image_source, &ico_config) {
         return Err(e.to_string());
@@ -141,8 +141,8 @@ pub fn run(config: Config) -> Result<i32, String> {
         thread::spawn(move || {
             let file_name = format!("favicon-{}.png", png_size);
             let png_path = Path::join(&favicons_path, Path::new(&file_name));
-            let image_source = image_convert::ImageResource::Path(&input);
-            let mut image_destination = image_convert::ImageResource::Path(png_path.to_str().unwrap());
+            let image_source = image_convert::ImageResource::from_path(&input);
+            let mut image_destination = image_convert::ImageResource::from_path(png_path);
             let mut png_config = image_convert::PNGConfig::new();
             png_config.shrink_only = false;
             png_config.width = png_size;
