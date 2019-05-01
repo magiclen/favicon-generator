@@ -12,7 +12,10 @@ install:
 	sudo cp ./target/release/favicon-generator /usr/local/bin/favicon-generator
 	sudo chown root. /usr/local/bin/favicon-generator
 	sudo chmod 0755 /usr/local/bin/favicon-generator
-	
+
+uninstall:
+	sudo rm /usr/local/bin/favicon-generator
+
 test:
 	cargo test --verbose
 	
