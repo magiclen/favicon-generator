@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use terminal_size::{Width, terminal_size};
 use clap::{App, Arg};
 
-use image_convert::{ColorName, ImageResource, PGMConfig, to_pgm};
+use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, identify, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand}};
 
 use scanner_rust::{Scanner, ScannerError};
 
@@ -178,27 +178,27 @@ impl Config {
                 .display_order(6)
             )
             .arg(Arg::with_name("BACKGROUND_COLOR").value_name("HEX_COLOR")
-                .long("background-color")
+                .long("background-color").visible_alias("background")
                 .help("Forces to assign a background color for all devices")
                 .takes_value(true)
                 .display_order(7)
             )
             .arg(Arg::with_name("ANDROID_BACKGROUND_COLOR").value_name("HEX_COLOR")
-                .long("android-background-color")
+                .long("android-background-color").visible_alias("android-background")
                 .help("Assigns a background color for Android devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
                 .display_order(8)
             )
             .arg(Arg::with_name("IOS_BACKGROUND_COLOR").value_name("HEX_COLOR")
-                .long("ios-background-color")
+                .long("ios-background-color").visible_alias("ios-background")
                 .help("Assigns a background color for iOS devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
                 .display_order(9)
             )
             .arg(Arg::with_name("WINDOWS_BACKGROUND_COLOR").value_name("HEX_COLOR")
-                .long("windows-background-color")
+                .long("windows-background-color").visible_alias("windows-background")
                 .help("Assigns a background color for Windows devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
@@ -417,9 +417,20 @@ pub fn run(config: Config) -> Result<i32, String> {
 
     tera.add_raw_template("browser_config", include_str!("resources/browser-config.xml")).map_err(|err| err.to_string())?;
 
-    let mut fail = true;
 
     if config.single_thread {
+        let (_ident, mw) = {
+            let input = ImageResource::Path(input_str.to_string());
+
+            let mut output = Some(None);
+
+            let ident = identify(&mut output, &input).map_err(|err| err.to_string())?;
+
+            (ident, output.unwrap().unwrap())
+        };
+
+        let mw_input = ImageResource::MagickWand(mw);
+
         {
             // web_app_manifest
             let content = json!(
@@ -467,22 +478,74 @@ pub fn run(config: Config) -> Result<i32, String> {
 
             pgm_config.background_color = Some(ColorName::White);
 
-            let input = ImageResource::Path(input_str.to_string());
-
             let mut output = ImageResource::Data(Vec::new());
 
-            to_pgm(&mut output, &input, &pgm_config).map_err(|err| err.to_string())?;
+            to_pgm(&mut output, &mw_input, &pgm_config).map_err(|err| err.to_string())?;
 
             let pgm_data = output.into_vec().unwrap();
 
-            let rtn = execute_one_stdin(&vec![potrace, "-s", "-", "-o", FILE_SVG_MONOCHROME], output_str, pgm_data)?;
+            let threshold_string = format!("{:.2}", config.threshold);
+
+            let rtn = execute_one_stdin(&vec![potrace, "-s", "-k", threshold_string.as_str(), "-", "-o", FILE_SVG_MONOCHROME], output_str, pgm_data)?;
 
             if rtn != 0 {
-                fail = false;
-
-                eprintln!("Fail to build `{}`.", svg_monochrome.to_string_lossy());
+                return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
             }
         }
+
+        {
+            // ico
+            let mut ico_config = ICOConfig::new();
+
+            for &size in ICO_SIZE.iter() {
+                ico_config.size.push((size, size));
+            }
+
+            let mut output = ImageResource::from_path(ico);
+
+            to_ico(&mut output, &mw_input, &ico_config).map_err(|err| err.to_string())?;
+        }
+
+        {
+            // png_vec
+            for (i, png) in png_vec.iter().enumerate() {
+                let size = PNG_SIZE[i];
+
+                let mut png_config = PNGConfig::new();
+                png_config.shrink_only = false;
+                png_config.width = size;
+                png_config.height = size;
+
+                let mut output = ImageResource::from_path(png);
+
+                to_png(&mut output, &mw_input, &png_config).map_err(|err| err.to_string())?;
+            }
+        }
+
+        {
+            // png_ios_background
+            let mw = mw_input.into_magick_wand().unwrap();
+
+            let mut pw = PixelWand::new();
+            pw.set_color(config.ios_background_color.as_str())?;
+            mw.set_image_background_color(&pw)?;
+            mw.set_image_alpha_channel(bindings::AlphaChannelOption_RemoveAlphaChannel)?;
+
+            let mut png_config = PNGConfig::new();
+            png_config.shrink_only = false;
+            png_config.width = 180;
+            png_config.height = 180;
+
+            let mw_input = ImageResource::MagickWand(mw);
+
+            let mut output = ImageResource::from_path(png_ios_background);
+
+            to_png(&mut output, &mw_input, &png_config).map_err(|err| err.to_string())?;
+        }
+
+        Ok(0)
+    } else {
+        Ok(0)
     }
 
 //    let output_path = Path::new(&config.output);
@@ -546,12 +609,6 @@ pub fn run(config: Config) -> Result<i32, String> {
 //    for _ in PNG_SIZE.iter() {
 //        rx.recv().unwrap();
 //    }
-
-    if fail {
-        Ok(-1)
-    } else {
-        Ok(0)
-    }
 }
 
 //fn check_exist_single_thread<P: AsRef<P>>(path: P) {
