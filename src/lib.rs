@@ -433,18 +433,21 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         {
             // web_app_manifest
+            let src_192 = format!("{}favicon-192.png", path_prefix);
+            let src_512 = format!("{}favicon-512.png", path_prefix);
+
             let content = json!(
                 {
                     "name": config.app_name,
                     "short_name": config.app_short_name,
                     "icons": [
                         {
-                            "src": "/android-chrome-192x192.png",
+                            "src": src_192,
                             "sizes": "192x192",
                             "type": "image/png"
                         },
                         {
-                            "src": "/android-chrome-512x512.png",
+                            "src": src_512,
                             "sizes": "512x512",
                             "type": "image/png"
                         }
