@@ -1,7 +1,7 @@
 Favicon Generator
 ====================
 
-It helps you generate favicons for different platforms.
+It helps you generate favicons with different formats and sizes.
 
 ## Help
 

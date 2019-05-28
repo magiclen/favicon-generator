@@ -6,7 +6,7 @@ repository = "https://github.com/magiclen/favicon-generator"
 homepage = "https://magiclen.org/favicon-generator"
 keywords = ["favicon"]
 categories = ["command-line-utilities"]
-description= "It helps you generate favicons for different platforms."
+description= "It helps you generate favicons with different formats and sizes."
 readme = "README.md"
 license = "MIT"
 
@@ -14,5 +14,16 @@ license = "MIT"
 panic = "abort"
 
 [dependencies]
+terminal_size = "0.1"
 clap = "2"
-image-convert = "0.5"
+image-convert = "0.7"
+scanner-rust = "1"
+subprocess = "0.1"
+threadpool = "1"
+num_cpus = "1"
+serde_json = "1"
+tera = "0.11"
+
+[dependencies.validators]
+version = "0.20"
+features = ["serdely"]
