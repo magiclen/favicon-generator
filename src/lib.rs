@@ -374,7 +374,7 @@ pub fn run(config: Config) -> Result<i32, String> {
             need_overwrite
         };
 
-        if need_overwrite && config.overwrite {
+        if need_overwrite && !config.overwrite {
             let mut sc = Scanner::new(io::stdin());
 
             loop {
