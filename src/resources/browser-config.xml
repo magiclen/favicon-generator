@@ -1,11 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-<browserconfig>
-    <msapplication>
-        <tile>
-            <square70x70logo src="{{path_prefix | escape}}favicon-70.png"/>
-            <square150x150logo src="{{path_prefix | escape}}favicon-150.png"/>
-            <square310x310logo src="{{path_prefix | escape}}favicon-310.png"/>
-            <TileColor>{{background_color}}</TileColor>
-        </tile>
-    </msapplication>
-</browserconfig>
+<?xml version="1.0" encoding="utf-8"?><browserconfig><msapplication><tile><square70x70logo src="{{path_prefix | escape}}favicon-70.png"/><square150x150logo src="{{path_prefix | escape}}favicon-150.png"/><square310x310logo src="{{path_prefix | escape}}favicon-310.png"/><TileColor>{{background_color}}</TileColor></tile></msapplication></browserconfig>
