@@ -273,7 +273,10 @@ fn execute_one_stdin(cmd: &[&str], cwd: &str, input: Vec<u8>) -> Result<i32, Str
 fn execute_capture(process: Exec) -> Result<i32, PopenError> {
     match process.capture() {
         Ok(capture) => {
-            eprintln!("{}", capture.stderr_str());
+            let err_message = capture.stderr_str();
+            if !err_message.is_empty() {
+                eprintln!("{}", err_message);
+            }
             match capture.exit_status {
                 ExitStatus::Exited(c) => Ok(c as i32),
                 ExitStatus::Signaled(c) => Ok(c as i32),
@@ -382,7 +385,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
                 io::stdout().flush().map_err(|err| err.to_string())?;
 
-                match sc.next().map_err(|err| match err {
+                match sc.next_line().map_err(|err| match err {
                     ScannerError::IOError(err) => err.to_string(),
                     _ => unreachable!()
                 })? {
@@ -482,7 +485,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         let pgm_data = output.into_vec().unwrap();
 
-        let threshold_string = format!("{:.2}", config.threshold);
+        let threshold_string = format!("{:.3}", config.threshold);
 
         let rtn = execute_one_stdin(&vec![potrace, "-s", "-k", threshold_string.as_str(), "-", "-o", FILE_SVG_MONOCHROME], output_str, pgm_data)?;
 
