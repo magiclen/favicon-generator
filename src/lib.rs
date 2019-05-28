@@ -8,7 +8,6 @@ extern crate scanner_rust;
 #[macro_use]
 extern crate validators;
 extern crate subprocess;
-extern crate num_cpus;
 #[macro_use]
 extern crate serde_json;
 extern crate tera;
