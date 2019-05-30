@@ -43,7 +43,8 @@ const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DEFAULT_POTRACE_PATH: &str = "potrace";
 const DEFAULT_PATH_PREFIX: &str = "/";
 const DEFAULT_THRESHOLD: &str = "0.5";
-const DEFAULT_BACKGROUND_COLOR: &str = "#FFFFFF";
+const DEFAULT_BACKGROUND_COLOR: &str = "#ffffff";
+const DEFAULT_SAFARI_BACKGROUND_COLOR: &str = "#000000";
 
 const FILE_WEB_APP_MANIFEST: &str = "web-app.manifest";
 const FILE_BROWSER_CONFIG: &str = "browser-config.xml";
@@ -51,7 +52,8 @@ const FILE_SVG_MONOCHROME: &str = "favicon-monochrome.svg";
 const FILE_PNG_IOS_BACKGROUND: &str = "favicon-180-i.png";
 
 const ICO_SIZE: [u16; 3] = [48, 32, 16];
-const PNG_SIZE: [u16; 7] = [512, 310, 192, 150, 70, 32, 16];
+const PNG_SIZE: [u16; 4] = [512, 192, 32, 16];
+const MSTILE_SIZE: [(u16, u16); 3] = [(310, 558), (150, 270), (70, 128)];
 
 lazy_static! {
     static ref RE_HEX_COLOR: Regex = {
@@ -96,6 +98,7 @@ pub struct Config {
     pub app_short_name: String,
     pub android_background_color: HexColor,
     pub ios_background_color: HexColor,
+    pub safari_background_color: HexColor,
     pub windows_background_color: HexColor,
 }
 
@@ -201,26 +204,34 @@ impl Config {
                 .default_value(DEFAULT_BACKGROUND_COLOR)
                 .display_order(14)
             )
+            .arg(Arg::with_name("SAFARI_BACKGROUND_COLOR").value_name("HEX_COLOR")
+                .long("safari-background-color").visible_alias("safari-background")
+                .help("Assigns a background color for iOS devices")
+                .takes_value(true)
+                .default_value(DEFAULT_SAFARI_BACKGROUND_COLOR)
+                .display_order(15)
+            )
             .arg(Arg::with_name("WINDOWS_BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("windows-background-color").visible_alias("windows-background")
                 .help("Assigns a background color for Windows devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
-                .display_order(15)
+                .display_order(16)
             )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
-        let (android_background_color, ios_background_color, windows_background_color) = match matches.value_of("BACKGROUND_COLOR") {
+        let (android_background_color, ios_background_color, safari_background_color, windows_background_color) = match matches.value_of("BACKGROUND_COLOR") {
             Some(background_color) => {
                 let background_color = HexColor::from_str(background_color).map_err(|err| err.to_string())?;
 
-                (background_color.clone(), background_color.clone(), background_color)
+                (background_color.clone(), background_color.clone(), background_color.clone(), background_color)
             }
             None => {
                 (
                     HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
                     HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
+                    HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
                     HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
                 )
             }
@@ -240,6 +251,7 @@ impl Config {
             app_short_name: matches.value_of("APP_SHORT_NAME").map(|s| s.into()).unwrap_or(String::new()),
             android_background_color,
             ios_background_color,
+            safari_background_color,
             windows_background_color,
         })
     }
@@ -346,15 +358,28 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         v
     };
+    let mstile_vec = {
+        let mut v = Vec::with_capacity(MSTILE_SIZE.len());
+
+        for &size in MSTILE_SIZE.iter() {
+            v.push(config.output.join(format!("mstile-{}.png", size.1)));
+        }
+
+        v
+    };
 
     if config.output.exists() {
         let need_overwrite = {
-            let mut path_vec = Vec::with_capacity(5 + PNG_SIZE.len());
+            let mut path_vec = Vec::with_capacity(5 + PNG_SIZE.len() + MSTILE_SIZE.len());
 
             path_vec.extend_from_slice(&[&web_app_manifest, &browser_config, &svg_monochrome, &png_ios_background, &ico]);
 
             for png in png_vec.iter() {
                 path_vec.push(png);
+            }
+
+            for mstile in mstile_vec.iter() {
+                path_vec.push(mstile);
             }
 
             let mut need_overwrite = false;
@@ -462,6 +487,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         context.insert("path_prefix", path_prefix);
         context.insert("background_color", &config.windows_background_color);
+        context.insert("mstile_size", &MSTILE_SIZE);
 
         let content = tera.render("browser-config", context).map_err(|err| err.to_string())?;
 
@@ -543,6 +569,26 @@ pub fn run(config: Config) -> Result<i32, String> {
     }
 
     {
+        // mstile_vec
+        for (i, mstile) in mstile_vec.iter().enumerate() {
+            let size = PNG_SIZE[i];
+
+            let mut png_config = PNGConfig::new();
+            png_config.shrink_only = false;
+            png_config.width = size;
+            png_config.height = size;
+
+            if !sharpen {
+                png_config.sharpen = 0f64;
+            }
+
+            let mut output = ImageResource::from_path(mstile);
+
+            to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
+        }
+    }
+
+    {
         // png_ios_background
         let mut png_config = PNGConfig::new();
         png_config.shrink_only = false;
@@ -583,8 +629,12 @@ pub fn run(config: Config) -> Result<i32, String> {
     context.insert("path_prefix", path_prefix);
     context.insert("android_background_color", &config.android_background_color);
     context.insert("windows_background_color", &config.windows_background_color);
+    context.insert("safari_background_color", &config.safari_background_color);
     context.insert("web_app_manifest", FILE_WEB_APP_MANIFEST);
     context.insert("png_ios_background", FILE_PNG_IOS_BACKGROUND);
+    context.insert("svg_monochrome", FILE_SVG_MONOCHROME);
+    context.insert("browser_config", FILE_BROWSER_CONFIG);
+    context.insert("png_size", &PNG_SIZE);
 
     let content = tera.render("html-head", context).map_err(|err| err.to_string())?;
 

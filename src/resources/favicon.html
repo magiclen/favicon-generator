@@ -1,6 +1,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="{{path_prefix | escape}}{{png_ios_background}}">
-<link rel="icon" type="image/png" sizes="32x32" href="{{path_prefix | escape}}favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="{{path_prefix | escape}}favicon-16.png">
+{% for size in png_size %}<link rel="icon" type="image/png" sizes="{{size}}x{{size}}" href="{{path_prefix | escape}}favicon-{{size}}.png">
+{% endfor %}<link rel="shortcut icon" href="{{path_prefix | escape}}favicon.ico">
 <link rel="manifest" href="{{path_prefix | escape}}{{web_app_manifest}}">
-<meta name="msapplication-TileColor" content="{{windows_background_color}}">
-<meta name="theme-color" content="{{android_background_color}}">
+<link rel="mask-icon" href="{{path_prefix | escape}}{{svg_monochrome}}" color="{{safari_background_color | lower}}">
+<meta name="msapplication-TileColor" content="{{windows_background_color | lower}}">
+<meta name="msapplication-config" content="{{path_prefix | escape}}{{browser_config}}"/>
+<meta name="theme-color" content="{{android_background_color | lower}}">
