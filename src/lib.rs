@@ -22,7 +22,7 @@ use std::io::{self, ErrorKind, Write};
 use terminal_size::{Width, terminal_size};
 use clap::{App, Arg};
 
-use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, identify, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand}};
+use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, fetch_magic_wand, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand}};
 
 use scanner_rust::{Scanner, ScannerError};
 
@@ -328,8 +328,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         return Err(format!("`{}` is not a file.", input.to_string_lossy()));
     }
 
-    let input_str = input.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", input.to_string_lossy()))?;
-
     let output_str = config.output.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", config.output.to_string_lossy()))?;
 
     let path_prefix = config.path_prefix.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", config.path_prefix.to_string_lossy()))?;
@@ -420,30 +418,11 @@ pub fn run(config: Config) -> Result<i32, String> {
         fs::create_dir_all(&config.output).map_err(|err| err.to_string())?;
     }
 
+    let input = ImageResource::Data(fs::read(input).map_err(|err| err.to_string())?);
+
     let mut tera = Tera::default();
 
     tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml")).map_err(|err| err.to_string())?;
-
-    let (ident, mw) = {
-        let input = ImageResource::Path(input_str.to_string());
-
-        let mut output = Some(None);
-
-        let ident = identify(&mut output, &input).map_err(|err| err.to_string())?;
-
-        (ident, output.unwrap().unwrap())
-    };
-
-    let sharpen = if config.sharpen {
-        match ident.format.as_str() {
-            "MVG" | "SVG" => false,
-            _ => true
-        }
-    } else {
-        false
-    };
-
-    let mw_input = ImageResource::MagickWand(mw);
 
     {
         // web_app_manifest
@@ -489,11 +468,15 @@ pub fn run(config: Config) -> Result<i32, String> {
         fs::write(browser_config, content).map_err(|err| err.to_string())?;
     }
 
-    {
+    let (input, vector) = {
         // svg_monochrome
         let mut pgm_config = PGMConfig::new();
 
         pgm_config.background_color = Some(ColorName::White);
+
+        let (mw, vector) = fetch_magic_wand(&input, &pgm_config).map_err(|err| err.to_string())?;
+
+        let mw_input = ImageResource::MagickWand(mw);
 
         let mut output = ImageResource::Data(Vec::new());
 
@@ -508,7 +491,19 @@ pub fn run(config: Config) -> Result<i32, String> {
         if rtn != 0 {
             return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
         }
-    }
+
+        if vector {
+            (mw_input, false)
+        } else {
+            (mw_input, false)
+        }
+    };
+
+    let sharpen = if vector {
+        false
+    } else {
+        config.sharpen
+    };
 
     {
         // ico
@@ -524,7 +519,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         let mut output = ImageResource::from_path(ico);
 
-        to_ico(&mut output, &mw_input, &ico_config).map_err(|err| err.to_string())?;
+        to_ico(&mut output, &input, &ico_config).map_err(|err| err.to_string())?;
     }
 
     {
@@ -543,33 +538,42 @@ pub fn run(config: Config) -> Result<i32, String> {
 
             let mut output = ImageResource::from_path(png);
 
-            to_png(&mut output, &mw_input, &png_config).map_err(|err| err.to_string())?;
+            to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
         }
     }
 
     {
         // png_ios_background
-        let mw = mw_input.into_magick_wand().unwrap();
+        let mut png_config = PNGConfig::new();
+        png_config.shrink_only = false;
+        png_config.width = 180;
+        png_config.height = 180;
+
+        let mw = if vector {
+            let (mw, vector) = fetch_magic_wand(&input, &png_config).map_err(|err| err.to_string())?;
+            if !vector {
+                return Err("The input image may not be a correct vector.".to_string());
+            }
+
+            mw
+        } else {
+            input.into_magick_wand().unwrap()
+        };
 
         let mut pw = PixelWand::new();
         pw.set_color(config.ios_background_color.as_str())?;
         mw.set_image_background_color(&pw)?;
         mw.set_image_alpha_channel(bindings::AlphaChannelOption_RemoveAlphaChannel)?;
 
-        let mut png_config = PNGConfig::new();
-        png_config.shrink_only = false;
-        png_config.width = 180;
-        png_config.height = 180;
-
         if !sharpen {
             png_config.sharpen = 0f64;
         }
 
-        let mw_input = ImageResource::MagickWand(mw);
+        let input = ImageResource::MagickWand(mw);
 
         let mut output = ImageResource::from_path(png_ios_background);
 
-        to_png(&mut output, &mw_input, &png_config).map_err(|err| err.to_string())?;
+        to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
     }
 
     tera.add_raw_template("html-head", include_str!("resources/favicon.html")).map_err(|err| err.to_string())?;
