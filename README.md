@@ -15,9 +15,10 @@ USAGE:
     favicon-generator [FLAGS] [OPTIONS] <INPUT_PATH> <OUTPUT_PATH>
 
 FLAGS:
-    -y, --overwrite    Overwrites exiting files without asking
-    -h, --help         Prints help information
-    -V, --version      Prints version information
+    -y, --overwrite     Overwrites exiting files without asking
+        --no-sharpen    Disables the automatic sharpening
+    -h, --help          Prints help information
+    -V, --version       Prints version information
 
 OPTIONS:
         --potrace-path <POTRACE_PATH>             Specifies the path of your potrace executable binary file [default: potrace]

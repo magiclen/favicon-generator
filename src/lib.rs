@@ -91,6 +91,7 @@ pub struct Config {
     pub path_prefix: PathBuf,
     pub overwrite: bool,
     pub threshold: Threshold,
+    pub sharpen: bool,
     pub app_name: String,
     pub app_short_name: String,
     pub android_background_color: HexColor,
@@ -163,44 +164,49 @@ impl Config {
                 .default_value(DEFAULT_THRESHOLD)
                 .display_order(3)
             )
+            .arg(Arg::with_name("NO_SHARPEN")
+                .long("no-sharpen")
+                .help("Disables the automatic sharpening")
+                .display_order(4)
+            )
             .arg(Arg::with_name("APP_NAME").value_name("NAME")
                 .long("app-name")
                 .help("Assigns a name for your web app")
                 .takes_value(true)
-                .display_order(4)
+                .display_order(10)
             )
             .arg(Arg::with_name("APP_SHORT_NAME").value_name("NAME")
                 .long("app-short-name")
                 .help("Assigns a short name for your web app")
                 .takes_value(true)
-                .display_order(5)
+                .display_order(11)
             )
             .arg(Arg::with_name("BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("background-color").visible_alias("background")
                 .help("Forces to assign a background color for all devices")
                 .takes_value(true)
-                .display_order(6)
+                .display_order(12)
             )
             .arg(Arg::with_name("ANDROID_BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("android-background-color").visible_alias("android-background")
                 .help("Assigns a background color for Android devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
-                .display_order(7)
+                .display_order(13)
             )
             .arg(Arg::with_name("IOS_BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("ios-background-color").visible_alias("ios-background")
                 .help("Assigns a background color for iOS devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
-                .display_order(8)
+                .display_order(14)
             )
             .arg(Arg::with_name("WINDOWS_BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("windows-background-color").visible_alias("windows-background")
                 .help("Assigns a background color for Windows devices")
                 .takes_value(true)
                 .default_value(DEFAULT_BACKGROUND_COLOR)
-                .display_order(9)
+                .display_order(15)
             )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
@@ -229,6 +235,7 @@ impl Config {
             path_prefix: matches.value_of("PATH_PREFIX").unwrap().into(),
             overwrite: matches.is_present("OVERWRITE"),
             threshold: Threshold::from_str(matches.value_of("THRESHOLD").unwrap()).map_err(|err| err.to_string())?,
+            sharpen: !matches.is_present("NO_SHARPEN"),
             app_name: matches.value_of("APP_NAME").map(|s| s.into()).unwrap_or(String::new()),
             app_short_name: matches.value_of("APP_SHORT_NAME").map(|s| s.into()).unwrap_or(String::new()),
             android_background_color,
@@ -417,7 +424,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
     tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml")).map_err(|err| err.to_string())?;
 
-    let (_ident, mw) = {
+    let (ident, mw) = {
         let input = ImageResource::Path(input_str.to_string());
 
         let mut output = Some(None);
@@ -425,6 +432,15 @@ pub fn run(config: Config) -> Result<i32, String> {
         let ident = identify(&mut output, &input).map_err(|err| err.to_string())?;
 
         (ident, output.unwrap().unwrap())
+    };
+
+    let sharpen = if config.sharpen {
+        match ident.format.as_str() {
+            "MVG" | "SVG" => false,
+            _ => true
+        }
+    } else {
+        false
     };
 
     let mw_input = ImageResource::MagickWand(mw);
@@ -498,6 +514,10 @@ pub fn run(config: Config) -> Result<i32, String> {
         // ico
         let mut ico_config = ICOConfig::new();
 
+        if !sharpen {
+            ico_config.sharpen = 0f64;
+        }
+
         for &size in ICO_SIZE.iter() {
             ico_config.size.push((size, size));
         }
@@ -516,6 +536,10 @@ pub fn run(config: Config) -> Result<i32, String> {
             png_config.shrink_only = false;
             png_config.width = size;
             png_config.height = size;
+
+            if !sharpen {
+                png_config.sharpen = 0f64;
+            }
 
             let mut output = ImageResource::from_path(png);
 
@@ -536,6 +560,10 @@ pub fn run(config: Config) -> Result<i32, String> {
         png_config.shrink_only = false;
         png_config.width = 180;
         png_config.height = 180;
+
+        if !sharpen {
+            png_config.sharpen = 0f64;
+        }
 
         let mw_input = ImageResource::MagickWand(mw);
 
