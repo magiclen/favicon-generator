@@ -27,9 +27,10 @@ OPTIONS:
         --app-name <NAME>                         Assigns a name for your web app
         --app-short-name <NAME>                   Assigns a short name for your web app
         --background-color <HEX_COLOR>            Forces to assign a background color for all devices [aliases: background]
-        --android-background-color <HEX_COLOR>    Assigns a background color for Android devices [default: #FFFFFF]  [aliases: android-background]
-        --ios-background-color <HEX_COLOR>        Assigns a background color for iOS devices [default: #FFFFFF]  [aliases: ios-background]
-        --windows-background-color <HEX_COLOR>    Assigns a background color for Windows devices [default: #FFFFFF]  [aliases: windows-background]
+        --android-background-color <HEX_COLOR>    Assigns a background color for Android devices [default: #ffffff]  [aliases: android-background]
+        --ios-background-color <HEX_COLOR>        Assigns a background color for iOS devices [default: #ffffff]  [aliases: ios-background]
+        --safari-background-color <HEX_COLOR>     Assigns a background color for iOS devices [default: #000000]  [aliases: safari-background]
+        --windows-background-color <HEX_COLOR>    Assigns a background color for Windows devices [default: #ffffff]  [aliases: windows-background]
 
 ARGS:
     <INPUT_PATH>     Assigns an image for generating favicons. It should be a path of a file
