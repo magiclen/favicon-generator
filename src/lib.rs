@@ -22,7 +22,7 @@ use std::io::{self, ErrorKind, Write};
 use terminal_size::{Width, terminal_size};
 use clap::{App, Arg};
 
-use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, fetch_magic_wand, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand}};
+use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, fetch_magic_wand, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand, MagickWand}};
 
 use scanner_rust::{Scanner, ScannerError};
 
@@ -53,7 +53,7 @@ const FILE_PNG_IOS_BACKGROUND: &str = "favicon-180-i.png";
 
 const ICO_SIZE: [u16; 3] = [48, 32, 16];
 const PNG_SIZE: [u16; 4] = [512, 192, 32, 16];
-const MSTILE_SIZE: [(u16, u16); 3] = [(310, 558), (150, 270), (70, 128)];
+const MSTILE_SIZE: [(u16, u16, u16, u16); 3] = [(310, 558, 256, 151), (150, 270, 128, 48), (70, 128, 96, 16)];
 
 lazy_static! {
     static ref RE_HEX_COLOR: Regex = {
@@ -362,7 +362,7 @@ pub fn run(config: Config) -> Result<i32, String> {
         let mut v = Vec::with_capacity(MSTILE_SIZE.len());
 
         for &size in MSTILE_SIZE.iter() {
-            v.push(config.output.join(format!("mstile-{}.png", size.1)));
+            v.push(config.output.join(format!("mstile-{}.png", size.0)));
         }
 
         v
@@ -571,18 +571,42 @@ pub fn run(config: Config) -> Result<i32, String> {
     {
         // mstile_vec
         for (i, mstile) in mstile_vec.iter().enumerate() {
-            let size = PNG_SIZE[i];
+            let size = MSTILE_SIZE[i];
 
             let mut png_config = PNGConfig::new();
             png_config.shrink_only = false;
-            png_config.width = size;
-            png_config.height = size;
+            png_config.width = size.2;
+            png_config.height = size.2;
 
             if !sharpen {
                 png_config.sharpen = 0f64;
             }
 
-            let mut output = ImageResource::from_path(mstile);
+            let mut output = ImageResource::Data(Vec::new());
+
+            to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
+
+            let mw_i = MagickWand::new();
+
+            mw_i.read_image_blob(output.into_vec().unwrap())?;
+
+            let mut mw = MagickWand::new();
+
+            mw.set_format("PNG32")?;
+
+            let mut pw = PixelWand::new();
+            pw.set_color("none")?;
+            mw.new_image(size.1 as usize, size.1 as usize, &pw)?;
+
+            mw.compose_images(&mw_i, bindings::CompositeOperator_OverCompositeOp, false, ((size.1 - size.2) / 2) as isize, size.3 as isize)?;
+
+            let input = ImageResource::MagickWand(mw);
+
+            png_config.width = 0;
+            png_config.height = 0;
+            png_config.sharpen = 0f64;
+
+            output = ImageResource::from_path(mstile);
 
             to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
         }
