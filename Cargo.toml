@@ -10,8 +10,9 @@ description= "It helps you generate favicons with different formats and sizes."
 readme = "README.md"
 license = "MIT"
 
-[badges]
-travis-ci = { repository = "magiclen/favicon-generator", branch = "master" }
+[badges.travis-ci]
+repository = "magiclen/favicon-generator"
+branch = "master"
 
 [profile.release]
 panic = "abort"
