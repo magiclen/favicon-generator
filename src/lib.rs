@@ -206,7 +206,7 @@ impl Config {
             )
             .arg(Arg::with_name("SAFARI_BACKGROUND_COLOR").value_name("HEX_COLOR")
                 .long("safari-background-color").visible_alias("safari-background")
-                .help("Assigns a background color for iOS devices")
+                .help("Assigns a background color for Safari")
                 .takes_value(true)
                 .default_value(DEFAULT_SAFARI_BACKGROUND_COLOR)
                 .display_order(15)
