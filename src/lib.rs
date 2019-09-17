@@ -2,9 +2,9 @@
 //! It helps you generate favicons with different formats and sizes.
 
 extern crate clap;
-extern crate terminal_size;
 extern crate image_convert;
 extern crate scanner_rust;
+extern crate terminal_size;
 #[macro_use]
 extern crate validators;
 extern crate subprocess;
@@ -15,24 +15,27 @@ extern crate tera;
 extern crate lazy_static;
 
 use std::env;
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::{self, ErrorKind, Write};
+use std::path::{Path, PathBuf};
 
-use terminal_size::{Width, terminal_size};
 use clap::{App, Arg};
+use terminal_size::{terminal_size, Width};
 
-use image_convert::{ColorName, ImageResource, PGMConfig, PNGConfig, ICOConfig, fetch_magic_wand, to_pgm, to_ico, to_png, magick_rust::{bindings, PixelWand, MagickWand}};
+use image_convert::{
+    fetch_magic_wand,
+    magick_rust::{bindings, MagickWand, PixelWand},
+    to_ico, to_pgm, to_png, ColorName, ICOConfig, ImageResource, PGMConfig, PNGConfig,
+};
 
 use scanner_rust::{Scanner, ScannerError};
 
 use validators::boolean::Boolean;
 use validators::regex::Regex;
 
-use subprocess::{Exec, ExitStatus, PopenError, NullFile};
+use subprocess::{Exec, ExitStatus, NullFile, PopenError};
 
-use tera::{Tera, Context};
-
+use tera::{Context, Tera};
 
 // TODO -----Config START-----
 
@@ -53,12 +56,11 @@ const FILE_PNG_IOS_BACKGROUND: &str = "favicon-180-i.png";
 
 const ICO_SIZE: [u16; 3] = [48, 32, 16];
 const PNG_SIZE: [u16; 4] = [512, 192, 32, 16];
-const MSTILE_SIZE: [(u16, u16, u16, u16); 3] = [(310, 558, 256, 151), (150, 270, 128, 48), (70, 128, 96, 16)];
+const MSTILE_SIZE: [(u16, u16, u16, u16); 3] =
+    [(310, 558, 256, 151), (150, 270, 128, 48), (70, 128, 96, 16)];
 
 lazy_static! {
-    static ref RE_HEX_COLOR: Regex = {
-        Regex::new("^#[0-f0-F]{6}$").unwrap()
-    };
+    static ref RE_HEX_COLOR: Regex = { Regex::new("^#[0-f0-F]{6}$").unwrap() };
 }
 
 validated_customized_ranged_number!(pub Threshold, f64, 0f64, 1.0f64);
@@ -73,7 +75,7 @@ impl Default for ExePaths {
     #[inline]
     fn default() -> Self {
         ExePaths {
-            potrace: DEFAULT_POTRACE_PATH.into()
+            potrace: DEFAULT_POTRACE_PATH.into(),
         }
     }
 }
@@ -221,34 +223,53 @@ impl Config {
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
-        let (android_background_color, ios_background_color, safari_background_color, windows_background_color) = match matches.value_of("BACKGROUND_COLOR") {
+        let (
+            android_background_color,
+            ios_background_color,
+            safari_background_color,
+            windows_background_color,
+        ) = match matches.value_of("BACKGROUND_COLOR") {
             Some(background_color) => {
-                let background_color = HexColor::from_str(background_color).map_err(|err| err.to_string())?;
+                let background_color =
+                    HexColor::from_str(background_color).map_err(|err| err.to_string())?;
 
-                (background_color.clone(), background_color.clone(), background_color.clone(), background_color)
+                (
+                    background_color.clone(),
+                    background_color.clone(),
+                    background_color.clone(),
+                    background_color,
+                )
             }
             None => {
                 (
-                    HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
-                    HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
-                    HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
-                    HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap()).map_err(|err| err.to_string())?,
+                    HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap())
+                        .map_err(|err| err.to_string())?,
+                    HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap())
+                        .map_err(|err| err.to_string())?,
+                    HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap())
+                        .map_err(|err| err.to_string())?,
+                    HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap())
+                        .map_err(|err| err.to_string())?,
                 )
             }
         };
 
         Ok(Config {
             paths: ExePaths {
-                potrace: matches.value_of("POTRACE_PATH").unwrap().into()
+                potrace: matches.value_of("POTRACE_PATH").unwrap().into(),
             },
             input: matches.value_of("INPUT_PATH").unwrap().into(),
             output: matches.value_of("OUTPUT_PATH").unwrap().into(),
             path_prefix: matches.value_of("PATH_PREFIX").unwrap().into(),
             overwrite: matches.is_present("OVERWRITE"),
-            threshold: Threshold::from_str(matches.value_of("THRESHOLD").unwrap()).map_err(|err| err.to_string())?,
+            threshold: Threshold::from_str(matches.value_of("THRESHOLD").unwrap())
+                .map_err(|err| err.to_string())?,
             sharpen: !matches.is_present("NO_SHARPEN"),
-            app_name: matches.value_of("APP_NAME").map(|s| s.into()).unwrap_or(String::new()),
-            app_short_name: matches.value_of("APP_SHORT_NAME").map(|s| s.into()).unwrap_or(String::new()),
+            app_name: matches.value_of("APP_NAME").map(|s| s.into()).unwrap_or_else(String::new),
+            app_short_name: matches
+                .value_of("APP_SHORT_NAME")
+                .map(|s| s.into())
+                .unwrap_or_else(String::new),
             android_background_color,
             ios_background_color,
             safari_background_color,
@@ -272,7 +293,7 @@ fn check_executable(cmd: &[&str]) -> Result<(), ()> {
                 Err(())
             }
         }
-        Err(_) => Err(())
+        Err(_) => Err(()),
     }
 }
 
@@ -285,7 +306,7 @@ fn execute_one_stdin(cmd: &[&str], cwd: &str, input: Vec<u8>) -> Result<i32, Str
 
     match execute_capture(process) {
         Ok(es) => Ok(es),
-        Err(error) => Err(error.to_string())
+        Err(error) => Err(error.to_string()),
     }
 }
 
@@ -298,14 +319,12 @@ fn execute_capture(process: Exec) -> Result<i32, PopenError> {
             }
             match capture.exit_status {
                 ExitStatus::Exited(c) => Ok(c as i32),
-                ExitStatus::Signaled(c) => Ok(c as i32),
+                ExitStatus::Signaled(c) => Ok(i32::from(c)),
                 ExitStatus::Other(c) => Ok(c),
                 _ => Ok(-1),
             }
         }
-        Err(error) => {
-            Err(error)
-        }
+        Err(error) => Err(error),
     }
 }
 
@@ -314,23 +333,23 @@ fn execute_join(process: Exec) -> Result<i32, PopenError> {
         Ok(es) => {
             match es {
                 ExitStatus::Exited(c) => Ok(c as i32),
-                ExitStatus::Signaled(c) => Ok(c as i32),
+                ExitStatus::Signaled(c) => Ok(i32::from(c)),
                 ExitStatus::Other(c) => Ok(c),
                 _ => Ok(-1),
             }
         }
-        Err(error) => {
-            Err(error)
-        }
+        Err(error) => Err(error),
     }
 }
 
 // TODO -----Process END-----
 
 pub fn run(config: Config) -> Result<i32, String> {
-    let potrace = config.paths.potrace.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", config.paths.potrace.to_string_lossy()))?;
+    let potrace = config.paths.potrace.to_str().ok_or_else(|| {
+        format!("`{}` is not a correct UTF-8 string.", config.paths.potrace.to_string_lossy())
+    })?;
 
-    if let Err(_) = check_executable(&vec![potrace, "-v"]) {
+    if check_executable(&[potrace, "-v"]).is_err() {
         return Err(format!("Cannot execute `{}`.", potrace));
     }
 
@@ -340,9 +359,13 @@ pub fn run(config: Config) -> Result<i32, String> {
         return Err(format!("`{}` is not a file.", input.to_string_lossy()));
     }
 
-    let output_str = config.output.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", config.output.to_string_lossy()))?;
+    let output_str = config.output.to_str().ok_or_else(|| {
+        format!("`{}` is not a correct UTF-8 string.", config.output.to_string_lossy())
+    })?;
 
-    let path_prefix = config.path_prefix.to_str().ok_or(format!("`{}` is not a correct UTF-8 string.", config.path_prefix.to_string_lossy()))?;
+    let path_prefix = config.path_prefix.to_str().ok_or_else(|| {
+        format!("`{}` is not a correct UTF-8 string.", config.path_prefix.to_string_lossy())
+    })?;
 
     let web_app_manifest = config.output.join(FILE_WEB_APP_MANIFEST);
     let browser_config = config.output.join(FILE_BROWSER_CONFIG);
@@ -372,7 +395,13 @@ pub fn run(config: Config) -> Result<i32, String> {
         let need_overwrite = {
             let mut path_vec = Vec::with_capacity(5 + PNG_SIZE.len() + MSTILE_SIZE.len());
 
-            path_vec.extend_from_slice(&[&web_app_manifest, &browser_config, &svg_monochrome, &png_ios_background, &ico]);
+            path_vec.extend_from_slice(&[
+                &web_app_manifest,
+                &browser_config,
+                &svg_monochrome,
+                &png_ios_background,
+                &ico,
+            ]);
 
             for png in png_vec.iter() {
                 path_vec.push(png);
@@ -415,9 +444,11 @@ pub fn run(config: Config) -> Result<i32, String> {
 
                 io::stdout().flush().map_err(|err| err.to_string())?;
 
-                match sc.next_line().map_err(|err| match err {
-                    ScannerError::IOError(err) => err.to_string(),
-                    _ => unreachable!()
+                match sc.next_line().map_err(|err| {
+                    match err {
+                        ScannerError::IOError(err) => err.to_string(),
+                        _ => unreachable!(),
+                    }
                 })? {
                     Some(token) => {
                         match Boolean::from_string(token) {
@@ -447,7 +478,8 @@ pub fn run(config: Config) -> Result<i32, String> {
 
     let mut tera = Tera::default();
 
-    tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml")).map_err(|err| err.to_string())?;
+    tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml"))
+        .map_err(|err| err.to_string())?;
 
     {
         // web_app_manifest
@@ -455,26 +487,26 @@ pub fn run(config: Config) -> Result<i32, String> {
         let src_512 = format!("{}favicon-512.png", path_prefix);
 
         let content = json!(
-                {
-                    "name": config.app_name,
-                    "short_name": config.app_short_name,
-                    "icons": [
-                        {
-                            "src": src_192,
-                            "sizes": "192x192",
-                            "type": "image/png"
-                        },
-                        {
-                            "src": src_512,
-                            "sizes": "512x512",
-                            "type": "image/png"
-                        }
-                    ],
-                    "theme_color": &config.android_background_color,
-                    "background_color": config.android_background_color,
-                    "display": "standalone"
-                }
-            );
+            {
+                "name": config.app_name,
+                "short_name": config.app_short_name,
+                "icons": [
+                    {
+                        "src": src_192,
+                        "sizes": "192x192",
+                        "type": "image/png"
+                    },
+                    {
+                        "src": src_512,
+                        "sizes": "512x512",
+                        "type": "image/png"
+                    }
+                ],
+                "theme_color": &config.android_background_color,
+                "background_color": config.android_background_color,
+                "display": "standalone"
+            }
+        );
 
         let content = serde_json::to_string(&content).unwrap();
 
@@ -512,17 +544,17 @@ pub fn run(config: Config) -> Result<i32, String> {
 
         let threshold_string = format!("{:.3}", config.threshold);
 
-        let rtn = execute_one_stdin(&vec![potrace, "-s", "-k", threshold_string.as_str(), "-", "-o", FILE_SVG_MONOCHROME], output_str, pgm_data)?;
+        let rtn = execute_one_stdin(
+            &[potrace, "-s", "-k", threshold_string.as_str(), "-", "-o", FILE_SVG_MONOCHROME],
+            output_str,
+            pgm_data,
+        )?;
 
         if rtn != 0 {
             return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
         }
 
-        if vector {
-            (mw_input, false)
-        } else {
-            (mw_input, false)
-        }
+        (mw_input, vector)
     };
 
     let sharpen = if vector {
@@ -598,7 +630,13 @@ pub fn run(config: Config) -> Result<i32, String> {
             pw.set_color("none")?;
             mw.new_image(size.1 as usize, size.1 as usize, &pw)?;
 
-            mw.compose_images(&mw_i, bindings::CompositeOperator_OverCompositeOp, false, ((size.1 - size.2) / 2) as isize, size.3 as isize)?;
+            mw.compose_images(
+                &mw_i,
+                bindings::CompositeOperator_OverCompositeOp,
+                false,
+                ((size.1 - size.2) / 2) as isize,
+                size.3 as isize,
+            )?;
 
             let input = ImageResource::MagickWand(mw);
 
@@ -620,7 +658,8 @@ pub fn run(config: Config) -> Result<i32, String> {
         png_config.height = 180;
 
         let mw = if vector {
-            let (mw, vector) = fetch_magic_wand(&input, &png_config).map_err(|err| err.to_string())?;
+            let (mw, vector) =
+                fetch_magic_wand(&input, &png_config).map_err(|err| err.to_string())?;
             if !vector {
                 return Err("The input image may not be a correct vector.".to_string());
             }
@@ -646,7 +685,8 @@ pub fn run(config: Config) -> Result<i32, String> {
         to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
     }
 
-    tera.add_raw_template("html-head", include_str!("resources/favicon.html")).map_err(|err| err.to_string())?;
+    tera.add_raw_template("html-head", include_str!("resources/favicon.html"))
+        .map_err(|err| err.to_string())?;
 
     let mut context = Context::new();
 
