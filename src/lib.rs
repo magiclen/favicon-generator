@@ -521,7 +521,7 @@ pub fn run(config: Config) -> Result<i32, String> {
         context.insert("background_color", &config.windows_background_color);
         context.insert("mstile_size", &MSTILE_SIZE);
 
-        let content = tera.render("browser-config", context).map_err(|err| err.to_string())?;
+        let content = tera.render("browser-config", &context).map_err(|err| err.to_string())?;
 
         fs::write(browser_config, content).map_err(|err| err.to_string())?;
     }
@@ -700,7 +700,7 @@ pub fn run(config: Config) -> Result<i32, String> {
     context.insert("browser_config", FILE_BROWSER_CONFIG);
     context.insert("png_size", &PNG_SIZE);
 
-    let content = tera.render("html-head", context).map_err(|err| err.to_string())?;
+    let content = tera.render("html-head", &context).map_err(|err| err.to_string())?;
 
     println!("{}", content);
 
