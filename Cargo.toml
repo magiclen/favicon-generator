@@ -1,6 +1,6 @@
 [package]
 name = "favicon-generator"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/favicon-generator"
@@ -19,14 +19,16 @@ branch = "master"
 panic = "abort"
 
 [dependencies]
+clap = "2.33.1"
+concat-with = "0.2"
 terminal_size = "0.1"
-clap = "2"
+
 image-convert = "0.9.5"
-scanner-rust = "1"
-subprocess = "0.2"
+scanner-rust = "2.0.8"
 serde_json = "1"
 tera = "1.0.0"
 lazy_static = "1"
+slash-formatter = "2.2.6"
 
 [dependencies.validators]
 version = "0.20"
