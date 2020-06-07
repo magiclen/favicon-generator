@@ -18,6 +18,7 @@ use std::env;
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::Path;
+use std::process;
 
 use clap::{App, Arg};
 use terminal_size::terminal_size;
@@ -54,7 +55,7 @@ const MSTILE_SIZE: [(u16, u16, u16, u16); 3] =
 
 fn main() -> Result<(), String> {
     let matches = App::new(APP_NAME)
-        .set_term_width( terminal_size().map(|(width, _)| width.0 as usize).unwrap_or(0))
+        .set_term_width(terminal_size().map(|(width, _)| width.0 as usize).unwrap_or(0))
         .version(CARGO_PKG_VERSION)
         .author(CARGO_PKG_AUTHORS)
         .about(concat!("It helps you generate favicons with different formats and sizes.\n\nEXAMPLES:\n", concat_line!(prefix "favicon-generator ",
@@ -394,8 +395,15 @@ fn main() -> Result<(), String> {
         )
         .map_err(|err| err.to_string())?;
 
-        if rtn != 0 {
-            return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
+        match rtn {
+            Some(code) => {
+                if code != 0 {
+                    return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
+                }
+            }
+            None => {
+                process::exit(1);
+            }
         }
 
         (mw_input, vector)

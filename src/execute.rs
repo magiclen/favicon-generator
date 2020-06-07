@@ -46,7 +46,11 @@ where
 }
 
 #[inline]
-pub fn execute_one_stdin<P, I, S, D>(program: P, args: I, input: &D) -> Result<i32, io::Error>
+pub fn execute_one_stdin<P, I, S, D>(
+    program: P,
+    args: I,
+    input: &D,
+) -> Result<Option<i32>, io::Error>
 where
     P: AsRef<OsStr>,
     I: IntoIterator<Item = S>,
@@ -66,5 +70,5 @@ where
         stdin.write_all(input.as_ref())?;
     }
 
-    Ok(child.wait()?.code().ok_or_else(unexpected_exit_status)?)
+    Ok(child.wait()?.code())
 }
