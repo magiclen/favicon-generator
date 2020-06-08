@@ -7,8 +7,6 @@ extern crate validators;
 #[macro_use]
 extern crate lazy_static;
 
-pub mod execute;
-
 use validators::regex::Regex;
 
 lazy_static! {

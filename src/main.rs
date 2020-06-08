@@ -6,6 +6,7 @@ extern crate terminal_size;
 #[macro_use]
 extern crate serde_json;
 
+extern crate execute;
 extern crate image_convert;
 extern crate scanner_rust;
 extern crate slash_formatter;
@@ -18,7 +19,7 @@ use std::env;
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::Path;
-use std::process;
+use std::process::{self, Command};
 
 use clap::{App, Arg};
 use terminal_size::terminal_size;
@@ -29,6 +30,8 @@ use scanner_rust::Scanner;
 use image_convert::magick_rust;
 
 use validators::boolean::Boolean;
+
+use execute::Execute;
 
 use favicon_generator::*;
 
@@ -197,7 +200,7 @@ fn main() -> Result<(), String> {
     let app_name = matches.value_of("APP_NAME").unwrap_or("");
     let app_short_name = matches.value_of("APP_SHORT_NAME").unwrap_or("");
 
-    if execute::check_executable(potrace, &["-v"], 0).is_err() {
+    if Command::new(potrace).args(&["-v"]).execute_check_exit_status_code(0).is_err() {
         return Err(format!("Cannot execute `{}`.", potrace));
     }
 
@@ -388,12 +391,10 @@ fn main() -> Result<(), String> {
 
         let threshold_string = format!("{:.3}", threshold);
 
-        let rtn = execute::execute_one_stdin(
-            potrace,
-            &["-s", "-k", threshold_string.as_str(), "-", "-o", potrace_output_path.as_str()],
-            &pgm_data,
-        )
-        .map_err(|err| err.to_string())?;
+        let rtn = Command::new(potrace)
+            .args(&["-s", "-k", threshold_string.as_str(), "-", "-o", potrace_output_path.as_str()])
+            .execute_input(&pgm_data)
+            .map_err(|err| err.to_string())?;
 
         match rtn {
             Some(code) => {
