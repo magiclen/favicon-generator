@@ -18,6 +18,7 @@ extern crate validators;
 extern crate favicon_generator;
 
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::Path;
@@ -58,7 +59,7 @@ const PNG_SIZE: [u16; 4] = [512, 192, 32, 16];
 const MSTILE_SIZE: [(u16, u16, u16, u16); 3] =
     [(310, 558, 256, 151), (150, 270, 128, 48), (70, 128, 96, 16)];
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = App::new(APP_NAME)
         .set_term_width(terminal_size().map(|(width, _)| width.0 as usize).unwrap_or(0))
         .version(CARGO_PKG_VERSION)
@@ -167,8 +168,7 @@ fn main() -> Result<(), String> {
         windows_background_color,
     ) = match matches.value_of("BACKGROUND_COLOR") {
         Some(background_color) => {
-            let background_color =
-                HexColor::from_str(background_color).map_err(|err| err.to_string())?;
+            let background_color = HexColor::from_str(background_color)?;
 
             (
                 background_color.clone(),
@@ -179,14 +179,10 @@ fn main() -> Result<(), String> {
         }
         None => {
             (
-                HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap())
-                    .map_err(|err| err.to_string())?,
-                HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap())
-                    .map_err(|err| err.to_string())?,
-                HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap())
-                    .map_err(|err| err.to_string())?,
-                HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap())
-                    .map_err(|err| err.to_string())?,
+                HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap())?,
+                HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap())?,
+                HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap())?,
+                HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap())?,
             )
         }
     };
@@ -196,14 +192,13 @@ fn main() -> Result<(), String> {
     let output = matches.value_of("OUTPUT_PATH").unwrap();
     let path_prefix = matches.value_of("PATH_PREFIX").unwrap();
     let overwrite = matches.is_present("OVERWRITE");
-    let threshold = Threshold::from_str(matches.value_of("THRESHOLD").unwrap())
-        .map_err(|err| err.to_string())?;
+    let threshold = Threshold::from_str(matches.value_of("THRESHOLD").unwrap())?;
     let sharpen = !matches.is_present("NO_SHARPEN");
     let app_name = matches.value_of("APP_NAME").unwrap_or("");
     let app_short_name = matches.value_of("APP_SHORT_NAME").unwrap_or("");
 
     if command_args!(potrace, "-v").execute_check_exit_status_code(0).is_err() {
-        return Err(format!("Cannot execute `{}`.", potrace));
+        return Err(format!("Cannot execute `{}`.", potrace).into());
     }
 
     let output_path = Path::new(output);
@@ -264,14 +259,16 @@ fn main() -> Result<(), String> {
                         if metadata.is_file() {
                             need_overwrite = true;
                         } else {
-                            return Err(format!("`{}` is not a file.", path.to_string_lossy()));
+                            return Err(
+                                format!("`{}` is not a file.", path.to_string_lossy()).into()
+                            );
                         }
                     }
                     Err(ref err) if err.kind() == ErrorKind::NotFound => {
                         // do nothing
                     }
                     Err(err) => {
-                        return Err(err.to_string());
+                        return Err(err.into());
                     }
                 }
             }
@@ -285,9 +282,9 @@ fn main() -> Result<(), String> {
             loop {
                 print!("Overwrite files? [Y/N] ");
 
-                io::stdout().flush().map_err(|err| err.to_string())?;
+                io::stdout().flush()?;
 
-                match sc.next_line().map_err(|err| err.to_string())? {
+                match sc.next_line()? {
                     Some(token) => {
                         match Boolean::from_string(token) {
                             Ok(token) => {
@@ -309,21 +306,20 @@ fn main() -> Result<(), String> {
             }
         }
     } else {
-        fs::create_dir_all(output_path).map_err(|err| err.to_string())?;
+        fs::create_dir_all(output_path)?;
     }
 
     let input = image_convert::ImageResource::Data(match fs::read(input) {
         Ok(data) => data,
         Err(ref err) if err.kind() == ErrorKind::NotFound => {
-            return Err(format!("`{}` is not a file.", input));
+            return Err(format!("`{}` is not a file.", input).into());
         }
-        Err(err) => return Err(err.to_string()),
+        Err(err) => return Err(err.into()),
     });
 
     let mut tera = tera::Tera::default();
 
-    tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml"))
-        .map_err(|err| err.to_string())?;
+    tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml"))?;
 
     {
         // web_app_manifest
@@ -354,7 +350,7 @@ fn main() -> Result<(), String> {
 
         let content = serde_json::to_string(&content).unwrap();
 
-        fs::write(web_app_manifest, content).map_err(|err| err.to_string())?;
+        fs::write(web_app_manifest, content)?;
     }
 
     {
@@ -365,9 +361,9 @@ fn main() -> Result<(), String> {
         context.insert("background_color", &windows_background_color);
         context.insert("mstile_size", &MSTILE_SIZE);
 
-        let content = tera.render("browser-config", &context).map_err(|err| err.to_string())?;
+        let content = tera.render("browser-config", &context)?;
 
-        fs::write(browser_config, content).map_err(|err| err.to_string())?;
+        fs::write(browser_config, content)?;
     }
 
     let (input, vector) = {
@@ -376,8 +372,7 @@ fn main() -> Result<(), String> {
 
         pgm_config.background_color = Some(image_convert::ColorName::White);
 
-        let (mw, vector) =
-            image_convert::fetch_magic_wand(&input, &pgm_config).map_err(|err| err.to_string())?;
+        let (mw, vector) = image_convert::fetch_magic_wand(&input, &pgm_config)?;
 
         let mw_input = image_convert::ImageResource::MagickWand(mw);
 
@@ -386,8 +381,7 @@ fn main() -> Result<(), String> {
 
         let mut output = image_convert::ImageResource::Data(Vec::new());
 
-        image_convert::to_pgm(&mut output, &mw_input, &pgm_config)
-            .map_err(|err| err.to_string())?;
+        image_convert::to_pgm(&mut output, &mw_input, &pgm_config)?;
 
         let pgm_data = output.into_vec().unwrap();
 
@@ -402,13 +396,14 @@ fn main() -> Result<(), String> {
             "-o",
             potrace_output_path.as_str()
         )
-        .execute_input(&pgm_data)
-        .map_err(|err| err.to_string())?;
+        .execute_input(&pgm_data)?;
 
         match rtn {
             Some(code) => {
                 if code != 0 {
-                    return Err(format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()));
+                    return Err(
+                        format!("Fail to build `{}`.", svg_monochrome.to_string_lossy()).into()
+                    );
                 }
             }
             None => {
@@ -439,7 +434,7 @@ fn main() -> Result<(), String> {
 
         let mut output = image_convert::ImageResource::from_path(ico);
 
-        image_convert::to_ico(&mut output, &input, &ico_config).map_err(|err| err.to_string())?;
+        image_convert::to_ico(&mut output, &input, &ico_config)?;
     }
 
     {
@@ -458,8 +453,7 @@ fn main() -> Result<(), String> {
 
             let mut output = image_convert::ImageResource::from_path(png);
 
-            image_convert::to_png(&mut output, &input, &png_config)
-                .map_err(|err| err.to_string())?;
+            image_convert::to_png(&mut output, &input, &png_config)?;
         }
     }
 
@@ -479,8 +473,7 @@ fn main() -> Result<(), String> {
 
             let mut output = image_convert::ImageResource::Data(Vec::new());
 
-            image_convert::to_png(&mut output, &input, &png_config)
-                .map_err(|err| err.to_string())?;
+            image_convert::to_png(&mut output, &input, &png_config)?;
 
             let mw_i = magick_rust::MagickWand::new();
 
@@ -510,8 +503,7 @@ fn main() -> Result<(), String> {
 
             output = image_convert::ImageResource::from_path(mstile);
 
-            image_convert::to_png(&mut output, &input, &png_config)
-                .map_err(|err| err.to_string())?;
+            image_convert::to_png(&mut output, &input, &png_config)?;
         }
     }
 
@@ -523,10 +515,9 @@ fn main() -> Result<(), String> {
         png_config.height = 180;
 
         let mw = if vector {
-            let (mw, vector) = image_convert::fetch_magic_wand(&input, &png_config)
-                .map_err(|err| err.to_string())?;
+            let (mw, vector) = image_convert::fetch_magic_wand(&input, &png_config)?;
             if !vector {
-                return Err("The input image may not be a correct vector.".to_string());
+                return Err("The input image may not be a correct vector.".into());
             }
 
             mw
@@ -547,11 +538,10 @@ fn main() -> Result<(), String> {
 
         let mut output = image_convert::ImageResource::from_path(png_ios_background);
 
-        image_convert::to_png(&mut output, &input, &png_config).map_err(|err| err.to_string())?;
+        image_convert::to_png(&mut output, &input, &png_config)?;
     }
 
-    tera.add_raw_template("html-head", include_str!("resources/favicon.html"))
-        .map_err(|err| err.to_string())?;
+    tera.add_raw_template("html-head", include_str!("resources/favicon.html"))?;
 
     let mut context = tera::Context::new();
 
@@ -565,7 +555,7 @@ fn main() -> Result<(), String> {
     context.insert("browser_config", FILE_BROWSER_CONFIG);
     context.insert("png_size", &PNG_SIZE);
 
-    let content = tera.render("html-head", &context).map_err(|err| err.to_string())?;
+    let content = tera.render("html-head", &context)?;
 
     println!("{}", content);
 
