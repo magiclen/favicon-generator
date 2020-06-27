@@ -10,6 +10,7 @@ categories = ["command-line-utilities"]
 description= "It helps you generate favicons with different formats and sizes."
 readme = "README.md"
 license = "MIT"
+include = ["src/**/*", "Cargo.toml"]
 
 [badges.travis-ci]
 repository = "magiclen/favicon-generator"
