@@ -212,7 +212,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let png_vec = {
         let mut v = Vec::with_capacity(PNG_SIZE.len());
 
-        for &size in PNG_SIZE.iter() {
+        for size in PNG_SIZE.iter().copied() {
             v.push(output_path.join(format!("favicon-{}.png", size)));
         }
 
@@ -222,7 +222,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mstile_vec = {
         let mut v = Vec::with_capacity(MSTILE_SIZE.len());
 
-        for &size in MSTILE_SIZE.iter() {
+        for size in MSTILE_SIZE.iter().copied() {
             v.push(output_path.join(format!("mstile-{}.png", size.0)));
         }
 
@@ -428,7 +428,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             ico_config.sharpen = 0f64;
         }
 
-        for &size in ICO_SIZE.iter() {
+        for size in ICO_SIZE.iter().copied() {
             ico_config.size.push((size, size));
         }
 
