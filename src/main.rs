@@ -32,7 +32,7 @@ use scanner_rust::Scanner;
 
 use image_convert::magick_rust;
 
-use validators::boolean::Boolean;
+use validators::prelude::*;
 
 use execute::Execute;
 
@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         windows_background_color,
     ) = match matches.value_of("BACKGROUND_COLOR") {
         Some(background_color) => {
-            let background_color = HexColor::from_str(background_color)?;
+            let background_color = HexColor::parse_str(background_color)?;
 
             (
                 background_color.clone(),
@@ -179,10 +179,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         None => {
             (
-                HexColor::from_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap())?,
-                HexColor::from_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap())?,
-                HexColor::from_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap())?,
-                HexColor::from_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap())?,
+                HexColor::parse_str(matches.value_of("ANDROID_BACKGROUND_COLOR").unwrap())?,
+                HexColor::parse_str(matches.value_of("IOS_BACKGROUND_COLOR").unwrap())?,
+                HexColor::parse_str(matches.value_of("SAFARI_BACKGROUND_COLOR").unwrap())?,
+                HexColor::parse_str(matches.value_of("WINDOWS_BACKGROUND_COLOR").unwrap())?,
             )
         }
     };
@@ -192,7 +192,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output = matches.value_of("OUTPUT_PATH").unwrap();
     let path_prefix = matches.value_of("PATH_PREFIX").unwrap();
     let overwrite = matches.is_present("OVERWRITE");
-    let threshold = Threshold::from_str(matches.value_of("THRESHOLD").unwrap())?;
+    let threshold = Threshold::parse_str(matches.value_of("THRESHOLD").unwrap())?;
     let sharpen = !matches.is_present("NO_SHARPEN");
     let app_name = matches.value_of("APP_NAME").unwrap_or("");
     let app_short_name = matches.value_of("APP_SHORT_NAME").unwrap_or("");
@@ -286,7 +286,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 match sc.next_line()? {
                     Some(token) => {
-                        match Boolean::from_string(token) {
+                        match Boolean::parse_string(token) {
                             Ok(token) => {
                                 if token.get_bool() {
                                     break;
@@ -385,7 +385,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let pgm_data = output.into_vec().unwrap();
 
-        let threshold_string = format!("{:.3}", threshold);
+        let threshold_string = format!("{:.3}", threshold.get_number());
 
         let rtn = command_args!(
             potrace,
