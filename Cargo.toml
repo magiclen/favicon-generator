@@ -1,6 +1,6 @@
 [package]
 name = "favicon-generator"
-version = "0.3.9"
+version = "0.3.10"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/favicon-generator"
@@ -10,13 +10,15 @@ categories = ["command-line-utilities"]
 description= "It helps you generate favicons with different formats and sizes."
 readme = "README.md"
 license = "MIT"
-include = ["src/**/*", "Cargo.toml"]
+include = ["src/**/*", "Cargo.toml", "README.md", "Cargo.toml"]
 
 [badges.travis-ci]
 repository = "magiclen/favicon-generator"
 branch = "master"
 
 [profile.release]
+lto = true
+codegen-units = 1
 panic = "abort"
 
 [dependencies]
