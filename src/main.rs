@@ -371,6 +371,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut pgm_config = image_convert::PGMConfig::new();
 
         pgm_config.background_color = Some(image_convert::ColorName::White);
+        pgm_config.crop = Some(image_convert::Crop::Center(1f64, 1f64));
 
         let (mw, vector) = image_convert::fetch_magic_wand(&input, &pgm_config)?;
 
@@ -378,6 +379,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let potrace_output_path =
             slash_formatter::concat_with_file_separator(output, FILE_SVG_MONOCHROME);
+
+        pgm_config.crop = None; // TODO: cannot use crop repeatedly, seems a bug
 
         let mut output = image_convert::ImageResource::Data(Vec::new());
 
