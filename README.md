@@ -1,7 +1,7 @@
 Favicon Generator
 ====================
 
-[![Build Status](https://travis-ci.org/magiclen/favicon-generator.svg?branch=master)](https://travis-ci.org/magiclen/favicon-generator)
+[![CI](https://github.com/magiclen/favicon-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/favicon-generator/actions/workflows/ci.yml)
 
 It helps you generate favicons with different formats and sizes.
 
