@@ -1,22 +1,3 @@
-#[macro_use]
-extern crate concat_with;
-extern crate clap;
-extern crate terminal_size;
-
-#[macro_use]
-extern crate serde_json;
-
-#[macro_use]
-extern crate execute;
-
-extern crate image_convert;
-extern crate scanner_rust;
-extern crate slash_formatter;
-extern crate tera;
-extern crate validators;
-
-extern crate favicon_generator;
-
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -27,6 +8,8 @@ use std::process;
 use clap::{App, Arg};
 use terminal_size::terminal_size;
 
+use concat_with::concat_line;
+
 use scanner_rust::generic_array::typenum::U8;
 use scanner_rust::Scanner;
 
@@ -34,7 +17,9 @@ use image_convert::magick_rust;
 
 use validators::prelude::*;
 
-use execute::Execute;
+use execute::{command_args, Execute};
+
+use serde_json::json;
 
 use favicon_generator::*;
 
@@ -212,7 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let png_vec = {
         let mut v = Vec::with_capacity(PNG_SIZE.len());
 
-        for size in PNG_SIZE.iter().copied() {
+        for size in PNG_SIZE.iter() {
             v.push(output_path.join(format!("favicon-{}.png", size)));
         }
 

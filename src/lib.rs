@@ -1,13 +1,6 @@
 //! # Favicon Generator
 //! It helps you generate favicons with different formats and sizes.
 
-#[macro_use]
-extern crate validators_derive;
-
-extern crate validators;
-
-extern crate once_cell;
-
 use validators::prelude::*;
 use validators_prelude::regex::Regex;
 
