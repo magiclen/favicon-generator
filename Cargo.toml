@@ -1,6 +1,6 @@
 [package]
 name = "favicon-generator"
-version = "0.3.15"
+version = "0.3.16"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
 repository = "https://github.com/magiclen/favicon-generator"
