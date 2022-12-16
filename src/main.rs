@@ -183,7 +183,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let app_short_name = matches.value_of("APP_SHORT_NAME").unwrap_or("");
 
     if command_args!(potrace, "-v").execute_check_exit_status_code(0).is_err() {
-        return Err(format!("Cannot execute `{}`.", potrace).into());
+        return Err(format!("Cannot execute `{potrace}`.").into());
     }
 
     let output_path = Path::new(output);
@@ -198,7 +198,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut v = Vec::with_capacity(PNG_SIZE.len());
 
         for size in PNG_SIZE.iter() {
-            v.push(output_path.join(format!("favicon-{}.png", size)));
+            v.push(output_path.join(format!("favicon-{size}.png")));
         }
 
         v
@@ -297,7 +297,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = image_convert::ImageResource::Data(match fs::read(input) {
         Ok(data) => data,
         Err(ref err) if err.kind() == ErrorKind::NotFound => {
-            return Err(format!("`{}` is not a file.", input).into());
+            return Err(format!("`{input}` is not a file.").into());
         }
         Err(err) => return Err(err.into()),
     });
@@ -308,8 +308,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     {
         // web_app_manifest
-        let src_192 = format!("{}favicon-192.png", path_prefix);
-        let src_512 = format!("{}favicon-512.png", path_prefix);
+        let src_192 = format!("{path_prefix}favicon-192.png");
+        let src_512 = format!("{path_prefix}favicon-512.png");
 
         let content = json!(
             {
@@ -545,7 +545,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let content = tera.render("html-head", &context)?;
 
-    println!("{}", content);
+    println!("{content}");
 
     Ok(())
 }
