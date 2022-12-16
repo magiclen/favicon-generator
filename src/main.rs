@@ -121,8 +121,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if output_path.exists() {
         let need_overwrite = {
-            let mut path_vec = Vec::with_capacity(1 + png_vec.len());
+            let mut path_vec = Vec::with_capacity(2 + png_vec.len());
 
+            path_vec.push(&ico);
             path_vec.push(&web_app_manifest);
 
             for png in png_vec.iter() {
@@ -235,7 +236,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let (input, vector) = {
-        // svg_monochrome
         let mut pgm_config = image_convert::PGMConfig::new();
 
         pgm_config.background_color = Some(image_convert::ColorName::White);
