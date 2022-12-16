@@ -25,7 +25,7 @@ const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 const DEFAULT_PATH_PREFIX: &str = "/";
 
-const FILE_WEB_APP_MANIFEST: &str = "web-app.manifest";
+const FILE_WEB_APP_MANIFEST: &str = "manifest.json";
 const FILE_FAVICON: &str = "favicon.ico";
 
 const ICO_SIZE: &[u16] = &[48, 32, 16];
