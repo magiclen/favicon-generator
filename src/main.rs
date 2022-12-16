@@ -307,7 +307,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut context = tera::Context::new();
 
-    context.insert("path_prefix", path_prefix);
+    context.insert("path_prefix", html_escape::encode_double_quoted_attribute(path_prefix).as_ref());
     context.insert("web_app_manifest", FILE_WEB_APP_MANIFEST);
     context.insert("apple_touch_icon_sizes", PNG_SIZES_FOR_APPLE_TOUCH_ICON);
     context.insert("icon_sizes", PNG_SIZES_FOR_ICON);
