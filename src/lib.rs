@@ -1,10 +1,9 @@
 //! # Favicon Generator
 //! It helps you generate favicons with different formats and sizes.
 
+use once_cell::sync::Lazy;
 use validators::prelude::*;
 use validators_prelude::regex::Regex;
-
-use once_cell::sync::Lazy;
 
 static RE_HEX_COLOR: Lazy<Regex> = Lazy::new(|| Regex::new("^#[0-f0-F]{6}$").unwrap());
 

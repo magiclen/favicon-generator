@@ -1,23 +1,19 @@
-use std::env;
-use std::error::Error;
-use std::fmt::Write as FmtWrite;
-use std::fs;
-use std::io::{self, ErrorKind, Write};
-use std::path::Path;
+use std::{
+    env,
+    error::Error,
+    fmt::Write as FmtWrite,
+    fs,
+    io::{self, ErrorKind, Write},
+    path::Path,
+};
 
 use clap::{Arg, Command};
-use terminal_size::terminal_size;
-
 use concat_with::concat_line;
-
-use scanner_rust::generic_array::typenum::U8;
-use scanner_rust::Scanner;
-
-use validators::prelude::*;
-
-use serde_json::json;
-
 use favicon_generator::*;
+use scanner_rust::{generic_array::typenum::U8, Scanner};
+use serde_json::json;
+use terminal_size::terminal_size;
+use validators::prelude::*;
 
 const APP_NAME: &str = "Favicon Generator";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -146,13 +142,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 format!("`{}` is not a file.", path.to_string_lossy()).into()
                             );
                         }
-                    }
+                    },
                     Err(ref err) if err.kind() == ErrorKind::NotFound => {
                         // do nothing
-                    }
+                    },
                     Err(err) => {
                         return Err(err.into());
-                    }
+                    },
                 }
             }
 
@@ -168,23 +164,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 io::stdout().flush()?;
 
                 match sc.next_line()? {
-                    Some(token) => {
-                        match Boolean::parse_string(token) {
-                            Ok(token) => {
-                                if token.get_bool() {
-                                    break;
-                                } else {
-                                    return Ok(());
-                                }
+                    Some(token) => match Boolean::parse_string(token) {
+                        Ok(token) => {
+                            if token.get_bool() {
+                                break;
+                            } else {
+                                return Ok(());
                             }
-                            Err(_) => {
-                                continue;
-                            }
-                        }
-                    }
+                        },
+                        Err(_) => {
+                            continue;
+                        },
+                    },
                     None => {
                         return Ok(());
-                    }
+                    },
                 }
             }
         }
@@ -196,7 +190,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(data) => data,
         Err(ref err) if err.kind() == ErrorKind::NotFound => {
             return Err(format!("`{input}` is not a file.").into());
-        }
+        },
         Err(err) => return Err(err.into()),
     });
 
@@ -248,11 +242,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         (mw_input, vector)
     };
 
-    let sharpen = if vector {
-        false
-    } else {
-        sharpen
-    };
+    let sharpen = if vector { false } else { sharpen };
 
     {
         // ico
