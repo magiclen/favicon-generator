@@ -17,6 +17,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
         toolchain:
+          - 1.58
           - stable
           - nightly
     name: Test ${{ matrix.toolchain }} on ${{ matrix.os }}
