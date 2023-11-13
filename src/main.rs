@@ -61,8 +61,8 @@ fn main() -> anyhow::Result<()> {
                 for path in path_vec {
                     match path.metadata() {
                         Ok(metadata) => {
-                            if !metadata.is_file() {
-                                return Err(anyhow!("{path:?} exists and it is not a file."));
+                            if metadata.is_dir() {
+                                return Err(anyhow!("{path:?} is a directory."));
                             }
 
                             need_overwrite = true;
