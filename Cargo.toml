@@ -1,9 +1,9 @@
 [package]
 name = "favicon-generator"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.74"
 repository = "https://github.com/magiclen/favicon-generator"
 homepage = "https://magiclen.org/favicon-generator"
 keywords = ["favicon", "generating", "web-app", "icon"]
@@ -25,7 +25,7 @@ terminal_size = "0.3"
 
 anyhow = "1"
 
-image-convert = "0.15"
+image-convert = "0.17"
 scanner-rust = "2"
 serde_json = "1"
 tera = "1"
