@@ -10,7 +10,7 @@ keywords = ["favicon", "generating", "web-app", "icon"]
 categories = ["command-line-utilities"]
 description = "It helps you generate favicons with different formats and sizes."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
+include = ["src/**/*", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [profile.release]
 lto = true
