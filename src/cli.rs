@@ -4,6 +4,8 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use concat_with::concat_line;
 use terminal_size::terminal_size;
 
+use crate::manifest::DisplayMode;
+
 const APP_NAME: &str = "Favicon Generator";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -35,11 +37,11 @@ pub struct CLIArgs {
     pub output_path: PathBuf,
 
     #[arg(short = 'y', long)]
-    #[arg(help = "Overwrite exiting files without asking")]
+    #[arg(help = "Overwrite existing files without asking")]
     pub overwrite: bool,
 
     #[arg(long)]
-    #[arg(default_value = "/")]
+    #[arg(default_value = "/", value_parser = parse_path_prefix)]
     #[arg(help = "Specify the path prefix of your favicon files")]
     pub path_prefix: String,
 
@@ -55,6 +57,55 @@ pub struct CLIArgs {
     #[arg(long)]
     #[arg(help = "Assign a short name for your web app")]
     pub app_short_name: Option<String>,
+
+    #[arg(long)]
+    #[arg(default_value = "/")]
+    #[arg(help = "Assign the URL your web app starts at")]
+    pub start_url: String,
+
+    #[arg(long)]
+    #[arg(default_value = "standalone")]
+    #[arg(help = "Assign how much browser UI your web app keeps")]
+    pub display: DisplayMode,
+
+    #[arg(long)]
+    #[arg(default_value = "#ffffff", value_parser = parse_hex_color)]
+    #[arg(help = "Assign the background color of the Apple touch icon and the maskable icon")]
+    pub background_color: String,
+
+    #[arg(long, value_parser = parse_hex_color)]
+    #[arg(help = "Assign the color the browser UI is tinted with")]
+    pub theme_color: Option<String>,
+}
+
+/// Make sure the prefix ends with a slash, because a file name is appended to it directly.
+fn parse_path_prefix(path_prefix: &str) -> Result<String, String> {
+    if path_prefix.is_empty() || path_prefix.ends_with('/') {
+        return Ok(path_prefix.to_string());
+    }
+
+    Ok(format!("{path_prefix}/"))
+}
+
+/// Read a `#rgb` or a `#rrggbb` color, and normalize it into the `#rrggbb` form which both CSS and **ImageMagick** understand.
+fn parse_hex_color(color: &str) -> Result<String, String> {
+    let digits = match color.strip_prefix('#') {
+        Some(digits) if digits.chars().all(|c| c.is_ascii_hexdigit()) => digits,
+        _ => return Err(format!("{color:?} is not a color like `#ffffff`.")),
+    };
+
+    match digits.len() {
+        3 => Ok(digits.chars().fold(String::from("#"), |mut color, digit| {
+            let digit = digit.to_ascii_lowercase();
+
+            color.push(digit);
+            color.push(digit);
+
+            color
+        })),
+        6 => Ok(format!("#{}", digits.to_ascii_lowercase())),
+        _ => Err(format!("{color:?} is not a color like `#ffffff`.")),
+    }
 }
 
 pub fn get_args() -> CLIArgs {
@@ -71,5 +122,35 @@ pub fn get_args() -> CLIArgs {
         Err(err) => {
             err.exit();
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_prefix_gets_a_trailing_slash() {
+        assert_eq!(Ok(String::from("/static/")), parse_path_prefix("/static"));
+        assert_eq!(Ok(String::from("/static/")), parse_path_prefix("/static/"));
+        assert_eq!(Ok(String::from("/")), parse_path_prefix("/"));
+        assert_eq!(Ok(String::new()), parse_path_prefix(""));
+    }
+
+    #[test]
+    fn hex_color_gets_normalized() {
+        assert_eq!(Ok(String::from("#ffffff")), parse_hex_color("#FFF"));
+        assert_eq!(Ok(String::from("#1e40af")), parse_hex_color("#1E40AF"));
+    }
+
+    #[test]
+    fn a_color_which_is_not_hexadecimal_is_rejected() {
+        assert!(parse_hex_color("white").is_err());
+        assert!(parse_hex_color("#12345").is_err());
+    }
+
+    #[test]
+    fn the_command_is_valid() {
+        CLIArgs::command().debug_assert();
     }
 }

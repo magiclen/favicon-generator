@@ -1,1 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?><browserconfig><msapplication><tile>{% for size in mstile_size %}<square{{size.0}}x{{size.0}}logo src="{{path_prefix | escape}}mstile-{{size.0}}.png"/>{% endfor %}<TileColor>{{background_color | lower}}</TileColor></tile></msapplication></browserconfig>

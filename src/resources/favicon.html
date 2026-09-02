@@ -1,7 +1,0 @@
-{% for size in apple_touch_icon_sizes %}<link rel="apple-touch-icon" type="image/png" sizes="{{size}}x{{size}}" href="{{path_prefix}}favicon-{{size}}.png">
-{% endfor %}
-{% for size in icon_sizes %}<link rel="icon" type="image/png" sizes="{{size}}x{{size}}" href="{{path_prefix}}favicon-{{size}}.png">
-{% endfor %}
-<link rel="icon" sizes="{{ico_sizes_concat}}" href="{{path_prefix}}favicon.ico">
-<link rel="shortcut icon" href="{{path_prefix}}favicon.ico">
-<link rel="manifest" href="{{path_prefix}}{{web_app_manifest}}">

@@ -1,242 +1,141 @@
 mod cli;
+mod favicon;
+mod html;
+mod manifest;
 
-use std::{fmt::Write as FmtWrite, fs, io, io::Write};
+use std::{fs, io, io::Write};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use cli::*;
-use scanner_rust::{generic_array::typenum::U8, Scanner};
-use serde_json::json;
-
-const FILE_WEB_APP_MANIFEST: &str = "manifest.json";
-const FILE_FAVICON: &str = "favicon.ico";
-
-const ICO_SIZE: &[u16] = &[48, 32, 16];
-const PNG_SIZES_FOR_ICON: &[u16] = &[196, 160, 95, 64, 32, 16];
-const PNG_SIZES_FOR_APPLE_TOUCH_ICON: &[u16] = &[180, 152, 144, 120, 114, 76, 72, 60, 57];
+use favicon::OutputFiles;
+use image_convert::ImageResource;
+use manifest::WebAppManifest;
 
 fn main() -> anyhow::Result<()> {
     let args = get_args();
 
-    let web_app_manifest = args.output_path.join(FILE_WEB_APP_MANIFEST);
-    let ico = args.output_path.join(FILE_FAVICON);
+    // the input image decides whether an SVG icon is written, so it is read before the output files are listed
+    let input = ImageResource::Data(
+        fs::read(args.input_path.as_path()).with_context(|| anyhow!("{:?}", args.input_path))?,
+    );
 
-    let png_sizes = {
-        let mut v = PNG_SIZES_FOR_ICON.to_vec();
+    let identify =
+        image_convert::identify_ping(&input).with_context(|| anyhow!("{:?}", args.input_path))?;
 
-        v.extend_from_slice(PNG_SIZES_FOR_APPLE_TOUCH_ICON);
+    let vector = favicon::is_vector(&identify);
 
-        v.sort();
+    let output_files = OutputFiles::new(args.output_path.as_path(), vector);
 
-        v
-    };
+    if !prepare_output_directory(&args, &output_files)? {
+        return Ok(());
+    }
 
-    let png_vec = {
-        let mut v = Vec::with_capacity(png_sizes.len());
+    let sharpen = !vector && !args.no_sharpen;
 
-        for size in png_sizes.iter() {
-            v.push(args.output_path.join(format!("favicon-{size}.png")));
-        }
+    if let Some(svg) = output_files.svg.as_deref() {
+        favicon::generate_svg(svg, input.as_u8_slice().unwrap())?;
+    }
 
-        v
-    };
+    let source = favicon::prepare_source(input, &identify)
+        .with_context(|| anyhow!("{:?}", args.input_path))?;
 
-    match args.output_path.metadata() {
-        Ok(metadata) => {
-            if !metadata.is_dir() {
-                return Err(anyhow!("{:?} is not a directory.", args.output_path));
-            }
+    favicon::generate_ico(output_files.ico.as_path(), &source, sharpen)?;
 
-            let need_overwrite = {
-                let mut path_vec = Vec::with_capacity(2 + png_vec.len());
+    favicon::generate_apple_touch_icon(
+        output_files.apple_touch_icon.as_path(),
+        &source,
+        args.background_color.as_str(),
+        sharpen,
+    )?;
 
-                path_vec.push(&ico);
-                path_vec.push(&web_app_manifest);
+    for (size, png) in output_files.manifest_icons.iter() {
+        favicon::generate_png(png.as_path(), &source, *size, sharpen)?;
+    }
 
-                for png in png_vec.iter() {
-                    path_vec.push(png);
-                }
+    favicon::generate_maskable_icon(
+        output_files.maskable_icon.as_path(),
+        &source,
+        args.background_color.as_str(),
+        sharpen,
+    )?;
 
-                let mut need_overwrite = false;
+    let web_app_manifest = output_files.web_app_manifest.as_path();
 
-                for path in path_vec {
-                    match path.metadata() {
-                        Ok(metadata) => {
-                            if metadata.is_dir() {
-                                return Err(anyhow!("{path:?} is a directory."));
-                            }
+    fs::write(web_app_manifest, WebAppManifest::new(&args).to_json())
+        .with_context(|| anyhow!("{web_app_manifest:?}"))?;
 
-                            need_overwrite = true;
-                        },
-                        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                            // do nothing
-                        },
-                        Err(error) => {
-                            return Err(error).with_context(|| anyhow!("{path:?}"));
-                        },
-                    }
-                }
+    println!("{}", html::build_head(&args, vector));
 
-                need_overwrite
-            };
+    Ok(())
+}
 
-            if need_overwrite && !args.overwrite {
-                let mut sc: Scanner<_, U8> = Scanner::new2(io::stdin());
-
-                loop {
-                    print!("Overwrite files? [Y/N] ");
-                    io::stdout().flush().with_context(|| "stdout")?;
-
-                    match sc.next_line().with_context(|| "stdin")? {
-                        Some(token) => match token.to_ascii_uppercase().as_str() {
-                            "Y" => {
-                                break;
-                            },
-                            "N" => {
-                                return Ok(());
-                            },
-                            _ => {
-                                continue;
-                            },
-                        },
-                        None => {
-                            return Ok(());
-                        },
-                    }
-                }
-            }
-        },
+/// Make sure the output directory exists and may be written into.
+///
+/// It returns `false` when the user refuses to overwrite the files which are already there.
+fn prepare_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyhow::Result<bool> {
+    let metadata = match args.output_path.metadata() {
+        Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             fs::create_dir_all(args.output_path.as_path())
                 .with_context(|| anyhow!("{:?}", args.output_path))?;
+
+            return Ok(true);
         },
         Err(error) => {
             return Err(error).with_context(|| anyhow!("{:?}", args.output_path));
         },
-    }
-
-    let input = image_convert::ImageResource::Data(
-        fs::read(args.input_path.as_path()).with_context(|| anyhow!("{:?}", args.input_path))?,
-    );
-
-    let mut tera = tera::Tera::default();
-
-    tera.add_raw_template("browser-config", include_str!("resources/browser-config.xml")).unwrap();
-
-    {
-        // web_app_manifest
-        let mut icons = Vec::with_capacity(PNG_SIZES_FOR_ICON.len());
-
-        for size in PNG_SIZES_FOR_ICON {
-            let src = format!("{path_prefix}favicon-{size}.png", path_prefix = args.path_prefix);
-            let sizes = format!("{size}x{size}");
-
-            icons.push(json!({
-                "src": src,
-                "sizes": sizes,
-                "type": "image/png",
-            }));
-        }
-
-        let mut content = json!(
-            {
-                "name": args.app_name,
-                "icons": icons,
-            }
-        );
-
-        if let Some(app_short_name) = args.app_short_name {
-            content.as_object_mut().unwrap().insert("short_name".into(), app_short_name.into());
-        }
-
-        let content = serde_json::to_string(&content).unwrap();
-
-        fs::write(web_app_manifest.as_path(), content)
-            .with_context(|| anyhow!("{web_app_manifest:?}"))?;
-    }
-
-    let (input, vector) = {
-        let mut pgm_config = image_convert::PGMConfig::new();
-
-        pgm_config.background_color = Some(image_convert::ColorName::White);
-        pgm_config.crop = Some(image_convert::Crop::Center(1f64, 1f64));
-
-        let (mw, vector) = image_convert::fetch_magic_wand(&input, &pgm_config)
-            .with_context(|| anyhow!("fetch_magic_wand {:?}", args.input_path))?;
-
-        let mw_input = image_convert::ImageResource::MagickWand(mw);
-
-        (mw_input, vector)
     };
 
-    let sharpen = if vector { false } else { !args.no_sharpen };
-
-    {
-        // ico
-        let mut ico_config = image_convert::ICOConfig::new();
-
-        if !sharpen {
-            ico_config.sharpen = 0f64;
-        }
-
-        for size in ICO_SIZE.iter().copied() {
-            ico_config.size.push((size, size));
-        }
-
-        let mut output = image_convert::ImageResource::from_path(ico.as_path());
-
-        image_convert::to_ico(&mut output, &input, &ico_config)
-            .with_context(|| anyhow!("to_ico {ico:?}"))?;
+    if !metadata.is_dir() {
+        return Err(anyhow!("{:?} is not a directory.", args.output_path));
     }
 
-    {
-        // png_vec
-        for (i, png) in png_vec.iter().enumerate() {
-            let size = png_sizes[i];
+    let mut need_overwrite = false;
 
-            let mut png_config = image_convert::PNGConfig::new();
-            png_config.shrink_only = false;
-            png_config.width = size;
-            png_config.height = size;
+    for path in output_files.iter() {
+        match path.metadata() {
+            Ok(metadata) => {
+                if metadata.is_dir() {
+                    return Err(anyhow!("{path:?} is a directory."));
+                }
 
-            if !sharpen {
-                png_config.sharpen = 0f64;
-            }
-
-            let mut output = image_convert::ImageResource::from_path(png.as_path());
-
-            image_convert::to_png(&mut output, &input, &png_config)
-                .with_context(|| anyhow!("to_ico {png:?}"))?;
+                need_overwrite = true;
+            },
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                // do nothing
+            },
+            Err(error) => {
+                return Err(error).with_context(|| anyhow!("{path:?}"));
+            },
         }
     }
 
-    let ico_sizes_concat = {
-        let mut s = String::new();
+    if need_overwrite && !args.overwrite {
+        return ask_overwrite();
+    }
 
-        for size in ICO_SIZE {
-            s.write_fmt(format_args!("{size}x{size} ")).unwrap();
+    Ok(true)
+}
+
+/// Ask whether the existing files may be overwritten, and keep asking until the answer can be understood.
+fn ask_overwrite() -> anyhow::Result<bool> {
+    let mut answer = String::new();
+
+    loop {
+        print!("Overwrite files? [Y/N] ");
+        io::stdout().flush().with_context(|| "stdout")?;
+
+        answer.clear();
+
+        if io::stdin().read_line(&mut answer).with_context(|| "stdin")? == 0 {
+            // the input has ended, so there is no answer to wait for
+            return Ok(false);
         }
 
-        s.truncate(s.len() - 1);
-
-        s
-    };
-
-    tera.add_raw_template("html-head", include_str!("resources/favicon.html")).unwrap();
-
-    let mut context = tera::Context::new();
-
-    context.insert(
-        "path_prefix",
-        html_escape::encode_double_quoted_attribute(args.path_prefix.as_str()).as_ref(),
-    );
-    context.insert("web_app_manifest", FILE_WEB_APP_MANIFEST);
-    context.insert("apple_touch_icon_sizes", PNG_SIZES_FOR_APPLE_TOUCH_ICON);
-    context.insert("icon_sizes", PNG_SIZES_FOR_ICON);
-    context.insert("ico_sizes_concat", &ico_sizes_concat);
-
-    let content = tera.render("html-head", &context).unwrap();
-
-    println!("{content}");
-
-    Ok(())
+        match answer.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            _ => continue,
+        }
+    }
 }
