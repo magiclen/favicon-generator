@@ -92,7 +92,7 @@ By default, `--fit contain` keeps the whole input image and centers it without c
 
 An SVG input is copied as it is, so `--fit` only affects its ICO and PNG outputs. A raster input should be at least 512x512 pixels. A smaller one is enlarged and can look blurry, so a warning is printed to the standard error.
 
-All images and the manifest are generated in memory first. They are written into temporary files next to the output files, which replace the existing files only after all of them are written, so a conversion or write error leaves the existing files unchanged.
+All images and the manifest are generated in memory first. They are written into temporary files next to the output files, which replace the existing files only after all of them are written. A conversion or temporary file write error leaves the existing files unchanged. The output files are replaced one at a time, so a replacement error may leave some files updated.
 
 ## Examples
 

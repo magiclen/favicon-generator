@@ -118,9 +118,9 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Write the files without leaving only a part of them updated when writing fails.
+/// Write every temporary file before replacing any output file.
 ///
-/// Each file is written into a new temporary file next to it, and the temporary files replace the files only after all of them are written.
+/// A temporary write error leaves existing files unchanged, but a rename error may leave some files replaced.
 fn write_files(files: &[(&Path, Cow<'_, [u8]>)]) -> anyhow::Result<()> {
     let mut replacements = Vec::with_capacity(files.len());
 
@@ -147,9 +147,14 @@ fn write_temporary_files(
     files: &[(&Path, Cow<'_, [u8]>)],
     replacements: &mut Vec<(PathBuf, PathBuf)>,
 ) -> anyhow::Result<()> {
-    for (path, data) in files {
+    for (output_path, data) in files {
         // Replace the file which a symbolic link points to, instead of the link itself.
-        let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let path = resolve_output_path(output_path).with_context(|| anyhow!("{output_path:?}"))?;
+
+        // `replacements` has one entry for each earlier file, in the same order.
+        if let Some(index) = replacements.iter().position(|(_, replaced)| *replaced == path) {
+            bail!("{:?} and {output_path:?} point to the same file.", files[index].0);
+        }
 
         let mut temporary_path = path.clone().into_os_string();
 
@@ -175,6 +180,50 @@ fn write_temporary_files(
     }
 
     Ok(())
+}
+
+/// Follow symbolic links, even dangling ones, so the files they point to are replaced instead of the links.
+///
+/// The returned path is canonical, so two paths of the same file are equal.
+fn resolve_output_path(path: &Path) -> io::Result<PathBuf> {
+    let mut path = path.to_path_buf();
+
+    loop {
+        match fs::canonicalize(&path) {
+            Ok(path) => return Ok(path),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match fs::symlink_metadata(&path) {
+                    Ok(metadata) if metadata.file_type().is_symlink() => {
+                        let target = fs::read_link(&path)?;
+
+                        if target.is_absolute() {
+                            path = target;
+                        } else {
+                            path.pop();
+                            path.push(target);
+                        }
+                    },
+                    Ok(_) => return Err(error),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        let path = std::path::absolute(&path)?;
+
+                        // `absolute` keeps `..`, so the parent is canonicalized to make the path canonical too.
+                        let (Some(parent), Some(file_name)) = (path.parent(), path.file_name())
+                        else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "The output path has no parent or file name.",
+                            ));
+                        };
+
+                        return Ok(fs::canonicalize(parent)?.join(file_name));
+                    },
+                    Err(error) => return Err(error),
+                }
+            },
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 /// Check the output directory and ask before overwriting existing files.
@@ -247,6 +296,59 @@ fn ask_overwrite(existing_files: &[&Path]) -> anyhow::Result<bool> {
             "y" | "yes" => return Ok(true),
             "n" | "no" => return Ok(false),
             _ => continue,
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::symlink;
+
+    use super::*;
+
+    struct TestDirectory(PathBuf);
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn writing_files_keeps_symbolic_links() {
+        let directory =
+            std::env::temp_dir().join(format!("favicon-generator-links-{}", process::id()));
+
+        fs::create_dir(&directory).unwrap();
+
+        let directory = TestDirectory(directory);
+        let links = directory.0.join("links");
+        let targets = directory.0.join("targets");
+
+        fs::create_dir(&links).unwrap();
+        fs::create_dir(&targets).unwrap();
+
+        for (name, existing, absolute) in [
+            ("existing-relative", true, false),
+            ("existing-absolute", true, true),
+            ("missing-relative", false, false),
+            ("missing-absolute", false, true),
+        ] {
+            let path = links.join(name);
+            let target = targets.join(name);
+            let link_target =
+                if absolute { target.clone() } else { Path::new("../targets").join(name) };
+
+            if existing {
+                fs::write(&target, b"old data").unwrap();
+            }
+
+            symlink(&link_target, &path).unwrap();
+            write_files(&[(path.as_path(), Cow::Borrowed(b"new data"))]).unwrap();
+
+            assert!(fs::symlink_metadata(&path).unwrap().file_type().is_symlink());
+            assert_eq!(link_target, fs::read_link(&path).unwrap());
+            assert_eq!(b"new data".as_slice(), fs::read(&target).unwrap());
         }
     }
 }

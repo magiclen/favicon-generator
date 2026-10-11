@@ -139,6 +139,9 @@ pub fn prepare_source(
     let (mut mw, _) =
         image_convert::fetch_magic_wand(&input, &config).with_context(|| "reading the image")?;
 
+    // The orientation and color profile have been applied, so later icons do not need the source metadata.
+    mw.strip_image()?;
+
     // Icons do not need 16-bit channels, and the PNG encoder writes the depth of the image.
     mw.set_image_depth(8)?;
 
