@@ -3,11 +3,17 @@ mod favicon;
 mod html;
 mod manifest;
 
-use std::{fs, io, io::Write};
+use std::{
+    borrow::Cow,
+    fs, io,
+    io::Write,
+    path::{Path, PathBuf},
+    process,
+};
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 use cli::*;
-use favicon::OutputFiles;
+use favicon::{LARGEST_ICON_SIZE, OutputFiles};
 use image_convert::ImageResource;
 use manifest::WebAppManifest;
 
@@ -22,65 +28,162 @@ fn main() -> anyhow::Result<()> {
     let identify =
         image_convert::identify_ping(&input).with_context(|| anyhow!("{:?}", args.input_path))?;
 
-    let vector = favicon::is_vector(&identify);
+    let svg = favicon::is_svg(&identify);
 
-    let output_files = OutputFiles::new(args.output_path.as_path(), vector);
+    let output_files = OutputFiles::new(args.output_path.as_path(), svg);
 
-    if !prepare_output_directory(&args, &output_files)? {
-        return Ok(());
+    if !check_output_directory(&args, &output_files)? {
+        bail!("Generation cancelled; no files were written.");
     }
 
-    let sharpen = !vector && !args.no_sharpen;
+    let sharpen = !svg && !args.no_sharpen;
 
-    if let Some(svg) = output_files.svg.as_deref() {
-        favicon::generate_svg(svg, input.as_u8_slice().unwrap())?;
-    }
-
-    let source = favicon::prepare_source(input, &identify)
+    let source = favicon::prepare_source(input, &identify, args.fit)
         .with_context(|| anyhow!("{:?}", args.input_path))?;
 
-    favicon::generate_ico(output_files.ico.as_path(), &source, sharpen)?;
-
-    favicon::generate_apple_touch_icon(
-        output_files.apple_touch_icon.as_path(),
-        &source,
-        args.background_color.as_str(),
-        sharpen,
-    )?;
-
-    for (size, png) in output_files.manifest_icons.iter() {
-        favicon::generate_png(png.as_path(), &source, *size, sharpen)?;
+    if let Some((width, height)) = source
+        .raster_size()
+        .filter(|&(width, height)| width.max(height) < LARGEST_ICON_SIZE as usize)
+    {
+        eprintln!(
+            "Warning: The icons are enlarged from a {width}x{height} image, so they can look \
+             blurry. Use an image of at least {LARGEST_ICON_SIZE}x{LARGEST_ICON_SIZE} pixels or \
+             an SVG image."
+        );
     }
 
-    favicon::generate_maskable_icon(
-        output_files.maskable_icon.as_path(),
-        &source,
-        args.background_color.as_str(),
-        sharpen,
-    )?;
+    let mut generated_files: Vec<(&Path, Cow<'_, [u8]>)> =
+        Vec::with_capacity(output_files.iter().count());
 
-    let web_app_manifest = output_files.web_app_manifest.as_path();
+    if let Some(svg) = output_files.svg.as_deref() {
+        generated_files.push((svg, source.resource.as_u8_slice().unwrap().into()));
+    }
 
-    fs::write(web_app_manifest, WebAppManifest::new(&args).to_json())
-        .with_context(|| anyhow!("{web_app_manifest:?}"))?;
+    let ico = output_files.ico.as_path();
 
-    println!("{}", html::build_head(&args, vector));
+    generated_files.push((
+        ico,
+        favicon::generate_ico(&source, args.fit, sharpen)
+            .with_context(|| anyhow!("generating {ico:?}"))?
+            .into(),
+    ));
+
+    let apple_touch_icon = output_files.apple_touch_icon.as_path();
+
+    generated_files.push((
+        apple_touch_icon,
+        favicon::generate_apple_touch_icon(
+            &source,
+            args.background_color.as_str(),
+            args.fit,
+            sharpen,
+        )
+        .with_context(|| anyhow!("generating {apple_touch_icon:?}"))?
+        .into(),
+    ));
+
+    for (size, png) in output_files.manifest_icons.iter() {
+        generated_files.push((
+            png.as_path(),
+            favicon::generate_png(&source, *size, args.fit, sharpen)
+                .with_context(|| anyhow!("generating {png:?}"))?
+                .into(),
+        ));
+    }
+
+    let maskable_icon = output_files.maskable_icon.as_path();
+
+    generated_files.push((
+        maskable_icon,
+        favicon::generate_maskable_icon(&source, args.background_color.as_str(), args.fit, sharpen)
+            .with_context(|| anyhow!("generating {maskable_icon:?}"))?
+            .into(),
+    ));
+
+    let mut web_app_manifest = WebAppManifest::new(&args).to_json();
+
+    web_app_manifest.push('\n');
+
+    generated_files
+        .push((output_files.web_app_manifest.as_path(), web_app_manifest.into_bytes().into()));
+
+    // Finish every conversion before creating the directory or writing any output file.
+    fs::create_dir_all(args.output_path.as_path())
+        .with_context(|| anyhow!("{:?}", args.output_path))?;
+
+    write_files(&generated_files)?;
+
+    println!("{}", html::build_head(&args, svg));
 
     Ok(())
 }
 
-/// Make sure the output directory exists and may be written into.
+/// Write the files without leaving only a part of them updated when writing fails.
+///
+/// Each file is written into a new temporary file next to it, and the temporary files replace the files only after all of them are written.
+fn write_files(files: &[(&Path, Cow<'_, [u8]>)]) -> anyhow::Result<()> {
+    let mut replacements = Vec::with_capacity(files.len());
+
+    let result = write_temporary_files(files, &mut replacements).and_then(|()| {
+        replacements.iter().try_for_each(|(temporary_path, path)| {
+            fs::rename(temporary_path, path).with_context(|| anyhow!("{path:?}"))
+        })
+    });
+
+    if result.is_err() {
+        for (temporary_path, _) in replacements.iter() {
+            // a temporary file which has been renamed is not there anymore, so the error is ignored
+            let _ = fs::remove_file(temporary_path);
+        }
+    }
+
+    result
+}
+
+/// Write the data of each file into a new temporary file in the same directory.
+///
+/// `replacements` gets every temporary file which has been created, paired with the path it is going to replace.
+fn write_temporary_files(
+    files: &[(&Path, Cow<'_, [u8]>)],
+    replacements: &mut Vec<(PathBuf, PathBuf)>,
+) -> anyhow::Result<()> {
+    for (path, data) in files {
+        // Replace the file which a symbolic link points to, instead of the link itself.
+        let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        let mut temporary_path = path.clone().into_os_string();
+
+        temporary_path.push(format!(".{}.tmp", process::id()));
+
+        let temporary_path = PathBuf::from(temporary_path);
+
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(temporary_path.as_path())
+            .with_context(|| anyhow!("{temporary_path:?}"))?;
+
+        replacements.push((temporary_path.clone(), path.clone()));
+
+        file.write_all(data).with_context(|| anyhow!("{temporary_path:?}"))?;
+
+        // A replaced file keeps its permissions.
+        if let Ok(metadata) = path.metadata() {
+            file.set_permissions(metadata.permissions())
+                .with_context(|| anyhow!("{temporary_path:?}"))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Check the output directory and ask before overwriting existing files.
 ///
 /// It returns `false` when the user refuses to overwrite the files which are already there.
-fn prepare_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyhow::Result<bool> {
+fn check_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyhow::Result<bool> {
     let metadata = match args.output_path.metadata() {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            fs::create_dir_all(args.output_path.as_path())
-                .with_context(|| anyhow!("{:?}", args.output_path))?;
-
-            return Ok(true);
-        },
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(true),
         Err(error) => {
             return Err(error).with_context(|| anyhow!("{:?}", args.output_path));
         },
@@ -90,7 +193,7 @@ fn prepare_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyho
         return Err(anyhow!("{:?} is not a directory.", args.output_path));
     }
 
-    let mut need_overwrite = false;
+    let mut existing_files = Vec::new();
 
     for path in output_files.iter() {
         match path.metadata() {
@@ -99,7 +202,7 @@ fn prepare_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyho
                     return Err(anyhow!("{path:?} is a directory."));
                 }
 
-                need_overwrite = true;
+                existing_files.push(path);
             },
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 // do nothing
@@ -110,25 +213,33 @@ fn prepare_output_directory(args: &CLIArgs, output_files: &OutputFiles) -> anyho
         }
     }
 
-    if need_overwrite && !args.overwrite {
-        return ask_overwrite();
+    if !existing_files.is_empty() && !args.overwrite {
+        return ask_overwrite(&existing_files);
     }
 
     Ok(true)
 }
 
-/// Ask whether the existing files may be overwritten, and keep asking until the answer can be understood.
-fn ask_overwrite() -> anyhow::Result<bool> {
+/// List the existing files and ask whether they may be overwritten, and keep asking until the answer can be understood.
+fn ask_overwrite(existing_files: &[&Path]) -> anyhow::Result<bool> {
+    eprintln!("These files already exist:");
+
+    for path in existing_files {
+        eprintln!("  {}", path.display());
+    }
+
     let mut answer = String::new();
 
     loop {
-        print!("Overwrite files? [Y/N] ");
-        io::stdout().flush().with_context(|| "stdout")?;
+        eprint!("Overwrite them? [Y/N] ");
+        io::stderr().flush().with_context(|| "stderr")?;
 
         answer.clear();
 
         if io::stdin().read_line(&mut answer).with_context(|| "stdin")? == 0 {
-            // the input has ended, so there is no answer to wait for
+            // the input has ended, so there is no answer to wait for, and the next message has to start on a new line
+            eprintln!();
+
             return Ok(false);
         }
 

@@ -1,6 +1,6 @@
 [package]
 name = "favicon-generator"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2024"
 rust-version = "1.85"
@@ -25,7 +25,7 @@ terminal_size = "0.4"
 
 anyhow = "1"
 
-image-convert = "0.22"
+image-convert = "0.25.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 html-escape = "0.2"

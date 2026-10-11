@@ -48,13 +48,11 @@ pub struct WebAppManifest<'a> {
 
 impl<'a> WebAppManifest<'a> {
     pub fn new(args: &'a CLIArgs) -> WebAppManifest<'a> {
-        let path_prefix = args.path_prefix.as_str();
-
         let mut icons: Vec<Icon> = MANIFEST_ICON_SIZES
             .iter()
             .copied()
             .map(|size| Icon {
-                src:     format!("{path_prefix}{}", manifest_icon_file_name(size)),
+                src:     manifest_icon_file_name(size),
                 sizes:   format!("{size}x{size}"),
                 mime:    ICON_MIME_TYPE,
                 purpose: None,
@@ -62,7 +60,7 @@ impl<'a> WebAppManifest<'a> {
             .collect();
 
         icons.push(Icon {
-            src:     format!("{path_prefix}{FILE_MASKABLE_ICON}"),
+            src:     FILE_MASKABLE_ICON.to_string(),
             sizes:   format!("{MASKABLE_ICON_SIZE}x{MASKABLE_ICON_SIZE}"),
             mime:    ICON_MIME_TYPE,
             purpose: Some(MASKABLE_PURPOSE),
@@ -112,17 +110,17 @@ mod tests {
   "background_color": "#ffffff",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/icon-mask.png",
+      "src": "icon-mask.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -137,7 +135,7 @@ mod tests {
     fn manifest_with_every_option() {
         let args = args_from(&[
             "--path-prefix",
-            "/static",
+            "static",
             "--app-name",
             "Magic Len",
             "--app-short-name",
@@ -162,17 +160,17 @@ mod tests {
   "theme_color": "#1e40af",
   "icons": [
     {
-      "src": "/static/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/static/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/static/icon-mask.png",
+      "src": "icon-mask.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

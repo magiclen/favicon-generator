@@ -4,7 +4,7 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use concat_with::concat_line;
 use terminal_size::terminal_size;
 
-use crate::manifest::DisplayMode;
+use crate::{favicon::FitMode, manifest::DisplayMode};
 
 const APP_NAME: &str = "Favicon Generator";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -42,8 +42,13 @@ pub struct CLIArgs {
 
     #[arg(long)]
     #[arg(default_value = "/", value_parser = parse_path_prefix)]
-    #[arg(help = "Specify the path prefix of your favicon files")]
+    #[arg(help = "Specify the path prefix used by the HTML tags")]
     pub path_prefix: String,
+
+    #[arg(long)]
+    #[arg(default_value = "contain")]
+    #[arg(help = "Fit the whole image with padding, or crop it from the center")]
+    pub fit: FitMode,
 
     #[arg(long)]
     #[arg(help = "Disable the automatic sharpening")]
